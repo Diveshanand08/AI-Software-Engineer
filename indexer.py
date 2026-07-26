@@ -135,21 +135,32 @@ def collect_documents(repo_path: Path) -> list[Document]:
     return all_chunks
 
 
-def build_index(documents: list[Document], collection_name: str):
-    """Embed documents and persist into Chroma."""
+def build_index(documents: list[Document], collection_name: str, batch_size: int = 50):
+    """Embed documents and persist into Chroma, in batches to avoid overwhelming Ollama."""
     if not documents:
         print("[indexer] No documents to index. Aborting.")
         return
 
     embeddings = OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
 
-    print(f"[indexer] Embedding {len(documents)} chunks with '{EMBED_MODEL}' ...")
-    vectordb = Chroma.from_documents(
-        documents=documents,
-        embedding=embeddings,
-        collection_name=collection_name,
-        persist_directory=str(CHROMA_DIR),
-    )
+    print(f"[indexer] Embedding {len(documents)} chunks with '{EMBED_MODEL}' in batches of {batch_size} ...")
+
+    vectordb = None
+    total = len(documents)
+    for i in range(0, total, batch_size):
+        batch = documents[i : i + batch_size]
+        print(f"[indexer]   batch {i // batch_size + 1}/{(total - 1) // batch_size + 1} "
+              f"({i + len(batch)}/{total} chunks)")
+        if vectordb is None:
+            vectordb = Chroma.from_documents(
+                documents=batch,
+                embedding=embeddings,
+                collection_name=collection_name,
+                persist_directory=str(CHROMA_DIR),
+            )
+        else:
+            vectordb.add_documents(batch)
+
     print(f"[indexer] Done. Index persisted to {CHROMA_DIR} under collection '{collection_name}'.")
     return vectordb
 
