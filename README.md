@@ -6,17 +6,17 @@ A full-stack AI code assistant that indexes GitHub repositories and lets you cha
 
 | Feature | Status |
 |---|---|
-| Repo indexing (AST-based chunking + vector embeddings) | ✅ Done |
-| Chat with your codebase (RAG Q&A) | ✅ Done |
-| Explain functions/classes (structured breakdown) | ✅ Done |
-| Automated bug detection (static analysis + LLM reasoning) | ✅ Done |
-| FastAPI backend (HTTP API for all features) | ✅ Done |
-| Docker sandbox for safe, isolated code execution | ✅ Done |
-| Self-correcting code generation (LangGraph agent loop) | ✅ Done |
-| Automated unit test generation | 🟡 Partial — see note below |
-| Pull request generation (GitHub API) | 🚧 In progress |
-| Web frontend (React) with chat history | 🚧 In progress |
-| Code quality metrics dashboard | 📋 Planned |
+| Repo indexing (AST-based chunking + vector embeddings) |  Done |
+| Chat with your codebase (RAG Q&A) |  Done |
+| Explain functions/classes (structured breakdown) |  Done |
+| Automated bug detection (static analysis + LLM reasoning) |  Done |
+| FastAPI backend (HTTP API for all features) |  Done |
+| Docker sandbox for safe, isolated code execution |  Done |
+| Self-correcting code generation (LangGraph agent loop) |  Done |
+| Automated unit test generation |  Partial — see note below |
+| Pull request generation (GitHub API) |  In progress |
+| Web frontend (React) with chat history |  In progress |
+| Code quality metrics dashboard |  Planned |
 
 **Note on unit test generation:** works reliably for simple, low-dependency functions. On functions with multiple internal dependencies, smaller models (phi3) can introduce syntax errors while patching prior mistakes, and larger models (llama3.1) occasionally emit placeholder comments (`# same as original implementation`) instead of fully materializing dependent code. Addressable with tighter prompt constraints (explicitly disallowing placeholders) or by supplying full dependency source directly rather than asking the model to redeclare it — planned as a follow-up improvement.
 
