@@ -23,7 +23,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from sandbox import run_code_in_sandbox
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 GENERATE_SYSTEM_PROMPT = """You are a Python code generator.
 Given a task, write a single, complete, self-contained Python script that accomplishes it.

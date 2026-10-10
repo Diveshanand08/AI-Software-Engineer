@@ -1,90 +1,211 @@
-import { MessagesSquare, FileCode2, Bug, Database, Sparkles } from 'lucide-react'
+import { MessagesSquare, FileCode2, Bug, Database, Github, FolderGit2, Loader2, Bot, Plus, Clock, X } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
-const MODES = [
-  { id: 'chat', label: 'Chat', desc: 'Ask about your codebase', icon: MessagesSquare },
-  { id: 'explain', label: 'Explain', desc: 'Break down any function', icon: FileCode2 },
-  { id: 'bugs', label: 'Find Bugs', desc: 'Detect issues & smells', icon: Bug },
+const NAV_ITEMS = [
+  { id: 'chat', label: 'Chat', icon: MessagesSquare, desc: 'Ask about your codebase' },
+  { id: 'explain', label: 'Explain', icon: FileCode2, desc: 'Break down any function' },
+  { id: 'bugs', label: 'Find Bugs', icon: Bug, desc: 'Detect issues & smells' },
+  { id: 'agent', label: 'Auto-Coder', icon: Bot, desc: 'AI writes & tests code' },
 ]
 
-export function Sidebar({ mode, onModeChange, collection, onCollectionChange, status }) {
+export function Sidebar({ 
+  isOpen,
+  onClose,
+  mode, 
+  onModeChange, 
+  collection, 
+  onCollectionChange, 
+  status, 
+  repoUrl, 
+  onRepoUrlChange, 
+  onImport, 
+  isIndexing,
+  historyList = [],
+  activeSessionId,
+  onSelectSession,
+  onNewChat
+}) {
   return (
-    <aside className="glass flex w-full shrink-0 flex-col gap-6 border-r p-4 md:w-72">
-      <div className="flex items-center gap-2.5 px-1 pt-1">
-        <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-amber shadow-[0_0_20px_-4px] shadow-primary/60">
-          <Sparkles className="h-4.5 w-4.5 text-primary-foreground" />
-        </div>
-        <div className="leading-tight">
-          <p className="font-mono text-sm font-semibold tracking-tight text-foreground">codeassist</p>
-          <p className="text-[11px] text-muted-foreground">AI code companion</p>
-        </div>
-      </div>
+    <>
+      {/* Dimmed Background Overlay */}
+      <div 
+        className={cn(
+          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300",
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+        onClick={onClose}
+      />
 
-      <div className="space-y-2">
-        <label htmlFor="collection" className="flex items-center gap-1.5 px-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-          <Database className="h-3 w-3" />
-          Collection
-        </label>
-        <div className="group relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-sm text-primary/70">#</span>
-          <input
-            id="collection"
-            value={collection}
-            onChange={(e) => onCollectionChange(e.target.value)}
-            placeholder="test_repo"
-            spellCheck={false}
-            className="w-full rounded-lg border border-border bg-background/40 py-2 pl-7 pr-3 font-mono text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/50 focus:ring-2 focus:ring-ring/40"
-          />
+      {/* Floating Drawer */}
+      <aside 
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col border-r border-white/10 bg-[#0d1117] shadow-2xl transition-transform duration-300 ease-in-out",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 shadow-[0_0_15px_-5px] shadow-blue-500/50">
+              <Database className="h-4 w-4 text-white" />
+            </div>
+            <span className="font-mono text-sm font-semibold tracking-tight text-white">
+              CodeAssist
+            </span>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1.5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
+            <X className="h-4 w-4" />
+          </button>
         </div>
-      </div>
 
-      <nav className="space-y-1.5">
-        <p className="px-1 pb-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Mode</p>
-        {MODES.map(({ id, label, desc, icon: Icon }) => {
-          const active = mode === id
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onModeChange(id)}
-              aria-pressed={active}
-              className={cn(
-                'group relative flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all',
-                active ? 'border-primary/40 bg-primary/10' : 'border-transparent hover:border-border hover:bg-secondary/60',
+        <div className="flex flex-1 flex-col overflow-y-auto p-4 gap-8">
+          
+          {/* IMPORT REPO SECTION */}
+          <div>
+            <h3 className="mb-3 flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+              <FolderGit2 className="h-3.5 w-3.5" />
+              Import Repository
+            </h3>
+            <div className="flex flex-col gap-2">
+              <div className="relative">
+                <Github className="absolute left-2.5 top-2 h-4 w-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="https://github.com/.../repo.git"
+                  value={repoUrl}
+                  onChange={(e) => onRepoUrlChange(e.target.value)}
+                  className="w-full rounded-md border border-white/10 bg-[#21262d]/50 py-1.5 pl-9 pr-3 font-mono text-xs text-gray-200 placeholder:text-gray-600 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                />
+              </div>
+              <input
+                type="text"
+                placeholder="Collection Name (e.g. test_repo)"
+                value={collection}
+                onChange={(e) => onCollectionChange(e.target.value)}
+                className="w-full rounded-md border border-white/10 bg-[#21262d]/50 px-3 py-1.5 font-mono text-xs text-gray-200 placeholder:text-gray-600 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+              />
+              <button
+                onClick={onImport}
+                disabled={isIndexing || !repoUrl || !collection}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600/10 py-1.5 font-mono text-xs font-semibold text-blue-500 transition-colors hover:bg-blue-600/20 disabled:opacity-50"
+              >
+                {isIndexing ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Indexing...
+                  </>
+                ) : (
+                  'Clone & Index'
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* MODE SECTION */}
+          <div>
+            <h3 className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+              Mode
+            </h3>
+            <nav className="flex flex-col gap-1.5">
+              {NAV_ITEMS.map((item) => {
+                const isActive = mode === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      onModeChange(item.id)
+                      onClose() // Auto-close on mobile/selection if desired
+                    }}
+                    className={cn(
+                      'group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all',
+                      isActive 
+                        ? 'border border-blue-500/20 bg-blue-500/10 shadow-[0_0_15px_-5px] shadow-blue-500/20' 
+                        : 'border border-transparent hover:bg-white/5'
+                    )}
+                  >
+                    <div className={cn(
+                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors',
+                      isActive 
+                        ? 'border-blue-500/30 bg-blue-500 text-white shadow-[0_0_10px_-2px] shadow-blue-500/50' 
+                        : 'border-white/10 bg-[#21262d] text-gray-400 group-hover:text-gray-200'
+                    )}>
+                      <item.icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col items-start text-left">
+                      <span className={cn(
+                        'font-mono text-sm font-medium transition-colors',
+                        isActive ? 'text-white' : 'text-gray-300 group-hover:text-white'
+                      )}>
+                        {item.label}
+                      </span>
+                      <span className="font-mono text-[10px] text-gray-500">
+                        {item.desc}
+                      </span>
+                    </div>
+                    {isActive && (
+                      <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                    )}
+                  </button>
+                )
+              })}
+            </nav>
+          </div>
+
+          {/* CHAT HISTORY SECTION */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                <Clock className="h-3.5 w-3.5" />
+                History
+              </h3>
+              <button
+                onClick={onNewChat}
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-500/10 text-blue-500 transition-colors hover:bg-blue-500/20"
+                title="Start New Chat"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto pr-1 space-y-1">
+              {historyList.length === 0 ? (
+                <div className="py-4 text-center font-mono text-[11px] text-gray-600">
+                  No previous chats
+                </div>
+              ) : (
+                historyList.map(session => (
+                  <button
+                    key={session.id}
+                    onClick={() => onSelectSession(session.id)}
+                    className={cn(
+                      'w-full truncate rounded-md px-3 py-2 text-left font-mono text-[11px] transition-colors',
+                      activeSessionId === session.id
+                        ? 'bg-blue-500/10 font-medium text-blue-400'
+                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                    )}
+                  >
+                    {session.title || 'New Conversation'}
+                  </button>
+                ))
               )}
-            >
-              <span className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors',
-                active ? 'bg-gradient-amber text-primary-foreground shadow-[0_0_16px_-4px] shadow-primary/70' : 'bg-secondary text-muted-foreground group-hover:text-foreground',
-              )}>
-                <Icon className="h-4 w-4" />
-              </span>
-              <span className="min-w-0">
-                <span className={cn('block font-mono text-sm font-medium', active ? 'text-foreground' : 'text-foreground/90')}>
-                  {label}
-                </span>
-                <span className="block truncate text-[11px] text-muted-foreground">{desc}</span>
-              </span>
-              {active && (
-                <span className="absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_8px] shadow-primary" />
-              )}
-            </button>
-          )
-        })}
-      </nav>
+            </div>
+          </div>
 
-      <div className="mt-auto rounded-lg border border-border bg-background/30 p-3">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full', status.ok ? 'bg-emerald-400/60' : 'bg-red-400/60')} />
-            <span className={cn('relative inline-flex h-2 w-2 rounded-full', status.ok ? 'bg-emerald-400' : 'bg-red-400')} />
-          </span>
-          <span className="font-mono text-xs text-muted-foreground">
-            {status.ok ? 'backend connected' : 'backend unreachable'}
-          </span>
         </div>
-        <p className="mt-1.5 font-mono text-[11px] text-muted-foreground/70">localhost:8000</p>
-      </div>
-    </aside>
+
+        <div className="p-4 shrink-0 border-t border-white/5 bg-[#0d1117]">
+          <div className="rounded-xl border border-white/10 bg-[#161b22]/50 p-3 backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <div className={cn('h-2 w-2 rounded-full', status.ok ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]')} />
+              <span className="font-mono text-[11px] text-gray-400">
+                {status.ok ? 'backend connected' : 'backend offline'}
+              </span>
+            </div>
+            <div className="mt-1.5 pl-4 font-mono text-[10px] text-gray-600">
+              localhost:8000
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
   )
 }

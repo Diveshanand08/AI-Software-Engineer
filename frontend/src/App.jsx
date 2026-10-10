@@ -1,30 +1,74 @@
-import { useEffect, useState } from 'react'
-import { Command, GitBranch, Settings2 } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { Command, GitBranch, Settings2, Menu } from 'lucide-react'
 import { Sidebar } from './components/codeassist/Sidebar.jsx'
 import { ChatPanel } from './components/codeassist/ChatPanel.jsx'
 import { CommandInput } from './components/codeassist/CommandInput.jsx'
-
+import { ModelPicker } from './components/codeassist/modelpicker.jsx'
 const API_BASE = 'http://localhost:8000'
-
-const MODE_TITLE = { chat: 'Chat', explain: 'Explain', bugs: 'Find Bugs' }
+const MODE_TITLE = { chat: 'Chat', explain: 'Explain', bugs: 'Find Bugs', agent: 'Auto-Coder Agent' }
 
 export default function App() {
   const [mode, setMode] = useState('chat')
   const [collection, setCollection] = useState('test_repo')
-  const [messagesByMode, setMessagesByMode] = useState({ chat: [], explain: [], bugs: [] })
+  
+  // Sidebar state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+
+  const [activeSessionId, setActiveSessionId] = useState(null)
+  const [messages, setMessages] = useState([])
+  const [historyList, setHistoryList] = useState([]) 
+
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [status, setStatus] = useState({ ok: false })
+  const [repoUrl, setRepoUrl] = useState('')
+  const [isIndexing, setIsIndexing] = useState(false)
+  const [provider, setProvider] = useState(() => localStorage.getItem('provider') || 'ollama')
 
-  const messages = messagesByMode[mode]
+function handleProviderChange(p) {
+  setProvider(p)
+  localStorage.setItem('provider', p)
+}
 
-  // ping the backend once on load so the sidebar status is real, not decorative
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sessions`)
+      if (res.ok) {
+        const data = await res.json()
+        setHistoryList(data)
+      }
+    } catch (e) {
+      console.error("Failed to fetch history:", e)
+    }
+  }, [])
+
   useEffect(() => {
+    fetchHistory()
     fetch(`${API_BASE}/`)
       .then((res) => setStatus({ ok: res.ok }))
       .catch(() => setStatus({ ok: false }))
-  }, [])
+  }, [fetchHistory])
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setMessages([]) 
+      return
+    }
+    const loadPastChat = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/sessions/${activeSessionId}`)
+        if (res.ok) {
+          const data = await res.json()
+          const formatted = data.map(m => ({ ...m, id: crypto.randomUUID() }))
+          setMessages(formatted)
+        }
+      } catch (e) {
+        console.error("Failed to load session:", e)
+      }
+    }
+    loadPastChat()
+  }, [activeSessionId])
 
   useEffect(() => {
     let timer
@@ -36,7 +80,26 @@ export default function App() {
   }, [loading])
 
   function appendMessage(m) {
-    setMessagesByMode((prev) => ({ ...prev, [mode]: [...prev[mode], m] }))
+    setMessages((prev) => [...prev, m])
+  }
+
+  async function handleImport() {
+    if (!repoUrl.trim() || !collection.trim() || isIndexing) return
+    setIsIndexing(true)
+    try {
+      const res = await fetch(`${API_BASE}/index`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: collection, repo_url: repoUrl }),
+      })
+      const data = await res.json()
+      alert(data.message)
+      setRepoUrl('')
+    } catch (e) {
+      alert(`Error starting import: ${e.message}`)
+    } finally {
+      setIsIndexing(false)
+    }
   }
 
   async function send(text) {
@@ -47,59 +110,109 @@ export default function App() {
     setInput('')
     setLoading(true)
 
-    try {
-      let res, data, replyText
 
+    try {
       if (mode === 'bugs') {
-        res = await fetch(`${API_BASE}/bugs`, {
+        const res = await fetch(`${API_BASE}/bugs`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ file_path: trimmed }),
         })
-        data = await res.json()
-        replyText = data.analysis || data.detail || 'No response.'
+        const data = await res.json()
+        appendMessage({ id: crypto.randomUUID(), role: 'assistant', content: data.analysis || 'No response.' })
       } else {
         const endpoint = mode === 'explain' ? '/explain' : '/ask'
-        const body = mode === 'explain'
-          ? { collection, target: trimmed }
-          : { collection, question: trimmed }
-        res = await fetch(`${API_BASE}${endpoint}`, {
+        const body = { collection, question: trimmed, target: trimmed, session_id: activeSessionId, provider }
+        
+        const res = await fetch(`${API_BASE}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
-        data = await res.json()
-        replyText = data.answer || data.detail || 'No response.'
-      }
 
-      appendMessage({ id: crypto.randomUUID(), role: 'assistant', content: replyText })
+        const msgId = crypto.randomUUID()
+        appendMessage({ id: msgId, role: 'assistant', content: '' })
+        setLoading(false) 
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          
+          buffer += decoder.decode(value, { stream: true })
+          
+          const sessionMatch = buffer.match(/__SESSION_ID__:(.+?)\n\n/)
+          if (sessionMatch) {
+            setActiveSessionId(sessionMatch[1])
+            buffer = buffer.replace(sessionMatch[0], '')
+            fetchHistory() 
+          }
+
+          if (buffer.includes('__SESSION_ID') && !sessionMatch) {
+            continue 
+          }
+          
+          if (buffer.length > 0) {
+            const currentText = buffer
+            setMessages(prev => prev.map(msg => 
+              msg.id === msgId ? { ...msg, content: msg.content + currentText } : msg
+            ))
+            buffer = '' 
+          }
+        }
+      }
     } catch (e) {
-      appendMessage({
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: `Error: ${e.message}\n\nIs the FastAPI backend running on ${API_BASE}?`,
-      })
+      appendMessage({ id: crypto.randomUUID(), role: 'assistant', content: `Error: ${e.message}` })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="bg-grid relative flex h-screen w-full overflow-hidden bg-background">
+    <div className="bg-grid fixed inset-0 flex overflow-hidden bg-background">
       <div className="glow-amber pointer-events-none absolute -left-40 -top-40 h-96 w-96 rounded-full blur-3xl" />
       <div className="glow-amber pointer-events-none absolute -bottom-40 right-10 h-96 w-96 rounded-full opacity-60 blur-3xl" />
 
+      {/* Floating Sidebar Overlay */}
       <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
         mode={mode}
         onModeChange={setMode}
         collection={collection}
         onCollectionChange={setCollection}
         status={status}
+        repoUrl={repoUrl}
+        onRepoUrlChange={setRepoUrl}
+        onImport={handleImport}
+        isIndexing={isIndexing}
+        historyList={historyList}
+        activeSessionId={activeSessionId}
+        onSelectSession={(id) => {
+          setActiveSessionId(id)
+          setIsSidebarOpen(false) // Close sidebar when choosing a chat
+        }}
+        onNewChat={() => {
+          setActiveSessionId(null)
+          setIsSidebarOpen(false) // Close sidebar when starting new chat
+        }}
       />
 
-      <main className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <header className="glass flex items-center justify-between border-b px-4 py-3 md:px-8">
+      {/* Ensure the main container does NOT scroll by adding relative, h-full, and overflow-hidden */}
+      <main className="relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+        
+        {/* Header - Stays fixed at top */}
+        <header className="glass shrink-0 flex items-center justify-between border-b px-4 py-3 md:px-8">
           <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="mr-2 flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
             <h1 className="font-mono text-sm font-semibold tracking-tight text-foreground">
               {MODE_TITLE[mode]}
             </h1>
@@ -109,10 +222,8 @@ export default function App() {
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <button type="button" className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground">
-              <Command className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">K</span>
-            </button>
+            <ModelPicker apiBase={API_BASE} value={provider} onChange={handleProviderChange} />
+  
             <button type="button" aria-label="Repository" className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-secondary/40 text-muted-foreground transition-colors hover:text-foreground">
               <GitBranch className="h-4 w-4" />
             </button>
@@ -122,9 +233,30 @@ export default function App() {
           </div>
         </header>
 
-        <ChatPanel messages={messages} mode={mode} onExample={send} loading={loading} elapsed={elapsed} />
+        {/* 
+          THE FIX: 
+          We separate the ChatPanel and the CommandInput completely.
+          ChatPanel takes up all available vertical space (flex-1).
+          CommandInput is absolutely positioned relative to this specific wrapper. 
+        */}
+        <div className="relative flex-1 overflow-hidden">
+          
+          {/* Chat Container - Scrolls independently */}
+          <div className="absolute inset-0 z-0">
+            <ChatPanel messages={messages} mode={mode} onExample={send} loading={loading} elapsed={elapsed} />
+          </div>
 
-        <CommandInput value={input} onChange={setInput} onSubmit={() => send(input)} mode={mode} disabled={loading} />
+          {/* 
+            Floating Search Bar - Locked to the bottom.
+            pointer-events-none lets you click "through" the gradient to interact with the chat below.
+          */}
+          <div className="pointer-events-none absolute bottom-0 left-0 z-20 w-full bg-linear-to-t from-[#0d1117] via-[#0d1117]/90 to-transparent pb-6 pt-16">
+            <div className="pointer-events-auto">
+              <CommandInput value={input} onChange={setInput} onSubmit={() => send(input)} mode={mode} disabled={loading} />
+            </div>
+          </div>
+
+        </div>
       </main>
     </div>
   )

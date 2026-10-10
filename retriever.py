@@ -17,7 +17,7 @@ from langchain_chroma import Chroma
 
 CHROMA_DIR = Path("./chroma_db")
 EMBED_MODEL = "nomic-embed-text"
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 
 def load_retriever(collection_name: str, k: int = 4):
@@ -40,7 +40,7 @@ def load_retriever(collection_name: str, k: int = 4):
     return vectordb.as_retriever(search_kwargs={"k": k})
 
 
-def retrieve(collection_name: str, query: str, k: int = 4):
+def retrieve(collection_name: str, query: str, k: int = 3):
     """Run a query against the index, return a list of (content, metadata) results."""
     retriever = load_retriever(collection_name, k=k)
     results = retriever.invoke(query)

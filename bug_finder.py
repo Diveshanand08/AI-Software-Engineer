@@ -19,7 +19,7 @@ from pathlib import Path
 from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 BUG_SYSTEM_PROMPT = """You are a senior code reviewer analyzing static analysis output for real bugs.
 
