@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
-import { Command, GitBranch, Settings2, Menu, LogOut } from 'lucide-react'
+import { Command, GitBranch, Settings2, Menu, LogOut, Plus } from 'lucide-react'
 import { Sidebar } from './components/codeassist/Sidebar.jsx'
 import { ChatPanel } from './components/codeassist/ChatPanel.jsx'
 import { CommandInput } from './components/codeassist/CommandInput.jsx'
@@ -210,6 +210,12 @@ function handleProviderChange(p) {
     }
   }
 
+  const handleNewChat = useCallback(() => {
+    setActiveSessionId(null)
+    setMessages([])
+    setIsSidebarOpen(false)
+  }, [])
+
   return (
     <div className="bg-grid fixed inset-0 flex overflow-hidden bg-background">
       <div className="glow-amber pointer-events-none absolute -left-40 -top-40 h-96 w-96 rounded-full blur-3xl" />
@@ -234,10 +240,7 @@ function handleProviderChange(p) {
           setActiveSessionId(id)
           setIsSidebarOpen(false)
         }}
-        onNewChat={() => {
-          setActiveSessionId(null)
-          setIsSidebarOpen(false)
-        }}
+        onNewChat={handleNewChat}
         onDeleteSession={handleDeleteSession}
       />
 
@@ -260,6 +263,15 @@ function handleProviderChange(p) {
               <span className="text-primary/70">#</span>
               {collection || 'no-collection'}
             </span>
+
+            <button
+              onClick={handleNewChat}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1 font-mono text-xs text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground active:scale-95"
+              title="Start a new chat"
+            >
+              <Plus className="h-3.5 w-3.5 text-blue-400" />
+              <span className="hidden sm:inline">New Chat</span>
+            </button>
           </div>
           <div className="flex items-center gap-1.5">
             <ModelPicker apiBase={API_BASE} value={provider} onChange={handleProviderChange} />

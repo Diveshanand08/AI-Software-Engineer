@@ -15,8 +15,8 @@ A full-stack AI code assistant that indexes GitHub repositories and lets you cha
 | Self-correcting code generation (LangGraph agent loop) | Done |
 | Automated unit test generation | Partial — see note below |
 | Pull request generation (GitHub API + git) | Done |
-| React frontend with chat interface | Done |
-| Code quality metrics dashboard | Planned |
+| React frontend with chat interface & Google Sign-In | Done |
+| Persistent chat history across sessions (SQLite + user isolation) | Done |
 
 **Note on unit test generation:** works reliably for simple, low-dependency functions. On functions with multiple internal dependencies, smaller models (phi3) can introduce syntax errors while patching prior mistakes, and larger models (llama3.1) occasionally emit placeholder comments (`# same as original implementation`) instead of fully materializing dependent code. Addressable with tighter prompt constraints or by supplying full dependency source directly — planned as a follow-up improvement.
 
@@ -207,9 +207,8 @@ Open `http://localhost:5173`. Interactive API docs at `http://localhost:8000/doc
 - [x] LangGraph self-correcting agent loop
 - [x] Automated unit test generation (simple functions reliable; complex-function reliability in progress)
 - [x] Automated pull request creation via GitHub API
-- [x] React frontend with chat/explain/bugs interface
-- [ ] Persistent chat history across sessions
-- [ ] Code quality metrics dashboard
+- [x] React frontend with chat/explain/bugs interface & Google Sign-In
+- [x] Persistent chat history across sessions (SQLite + user-specific Gmail isolation)
 
 ## Author
 
