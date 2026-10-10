@@ -15,8 +15,8 @@ from pathlib import Path
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 
-CHROMA_DIR = Path("./chroma_db")
-EMBED_MODEL = "nomic-embed-text"
+CHROMA_DIR = Path(os.getenv("CHROMA_DIR", "./chroma_db"))
+EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 

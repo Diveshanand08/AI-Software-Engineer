@@ -21,9 +21,9 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 # --- config ---
-CLONE_DIR = Path("./_cloned_repos")
-CHROMA_DIR = Path("./chroma_db")
-EMBED_MODEL = "nomic-embed-text"
+CLONE_DIR = Path(os.getenv("CLONE_DIR", "./_cloned_repos"))
+CHROMA_DIR = Path(os.getenv("CHROMA_DIR", "./chroma_db"))
+EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 # file extensions worth indexing
