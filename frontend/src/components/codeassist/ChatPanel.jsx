@@ -87,7 +87,7 @@ function MessageBubble({ message }) {
   )
 }
 
-export function ChatPanel({ messages = [], onExample, loading }) {
+export function ChatPanel({ messages = [], onExample, loading, displayName = 'User' }) {
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -100,7 +100,7 @@ export function ChatPanel({ messages = [], onExample, loading }) {
       <div className="flex h-full flex-col px-4 pt-16 md:pt-24 max-w-200 mx-auto overflow-y-auto">
         <div className="mb-12">
           <h1 className="text-[44px] font-medium leading-tight bg-linear-to-r from-[#4285f4] via-[#d96570] to-[#f4b400] text-transparent bg-clip-text">
-            Hello, Divesh
+            Hello, {displayName}
           </h1>
           <h2 className="text-[44px] font-medium leading-tight text-[#444746]">
             How can I help you today?

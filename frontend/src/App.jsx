@@ -1,13 +1,16 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Command, GitBranch, Settings2, Menu } from 'lucide-react'
+import { GoogleLogin } from '@react-oauth/google'
+import { Command, GitBranch, Settings2, Menu, LogOut } from 'lucide-react'
 import { Sidebar } from './components/codeassist/Sidebar.jsx'
 import { ChatPanel } from './components/codeassist/ChatPanel.jsx'
 import { CommandInput } from './components/codeassist/CommandInput.jsx'
 import { ModelPicker } from './components/codeassist/modelpicker.jsx'
+import { useAuth } from './lib/useAuth.js'
 const API_BASE = 'http://localhost:8000'
 const MODE_TITLE = { chat: 'Chat', explain: 'Explain', bugs: 'Find Bugs', agent: 'Auto-Coder Agent' }
 
 export default function App() {
+  const { user, displayName, login, logout } = useAuth()
   const [mode, setMode] = useState('chat')
   const [collection, setCollection] = useState('test_repo')
   
@@ -34,7 +37,8 @@ function handleProviderChange(p) {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/sessions`)
+      const emailQuery = user?.email ? `?user_email=${encodeURIComponent(user.email)}` : ''
+      const res = await fetch(`${API_BASE}/sessions${emailQuery}`)
       if (res.ok) {
         const data = await res.json()
         setHistoryList(data)
@@ -42,14 +46,19 @@ function handleProviderChange(p) {
     } catch (e) {
       console.error("Failed to fetch history:", e)
     }
-  }, [])
+  }, [user?.email])
 
   useEffect(() => {
+    setActiveSessionId(null)
+    setMessages([])
     fetchHistory()
+  }, [user?.email, fetchHistory])
+
+  useEffect(() => {
     fetch(`${API_BASE}/`)
       .then((res) => setStatus({ ok: res.ok }))
       .catch(() => setStatus({ ok: false }))
-  }, [fetchHistory])
+  }, [])
 
   useEffect(() => {
     if (skipSessionLoadRef.current) {
@@ -140,7 +149,14 @@ function handleProviderChange(p) {
         appendMessage({ id: crypto.randomUUID(), role: 'assistant', content: data.analysis || 'No response.' })
       } else {
         const endpoint = mode === 'explain' ? '/explain' : '/ask'
-        const body = { collection, question: trimmed, target: trimmed, session_id: activeSessionId, provider }
+        const body = {
+          collection,
+          question: trimmed,
+          target: trimmed,
+          session_id: activeSessionId,
+          provider,
+          user_email: user?.email || '',
+        }
         
         const res = await fetch(`${API_BASE}${endpoint}`, {
           method: 'POST',
@@ -254,6 +270,37 @@ function handleProviderChange(p) {
             <button type="button" aria-label="Settings" className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-secondary/40 text-muted-foreground transition-colors hover:text-foreground">
               <Settings2 className="h-4 w-4" />
             </button>
+
+            {/* Auth section */}
+            {user ? (
+              <div className="flex items-center gap-2 ml-1">
+                {user.picture ? (
+                  <img src={user.picture} alt={displayName} className="h-7 w-7 rounded-full ring-1 ring-white/20" />
+                ) : (
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 font-mono text-xs font-bold text-white">
+                    {displayName[0].toUpperCase()}
+                  </div>
+                )}
+                <button
+                  onClick={logout}
+                  title="Sign out"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="ml-1 scale-75 origin-right">
+                <GoogleLogin
+                  onSuccess={login}
+                  onError={() => console.error('Google login failed')}
+                  shape="pill"
+                  size="medium"
+                  theme="filled_black"
+                  text="signin"
+                />
+              </div>
+            )}
           </div>
         </header>
 
@@ -267,7 +314,7 @@ function handleProviderChange(p) {
           
           {/* Chat Container - Scrolls independently */}
           <div className="absolute inset-0 z-0">
-            <ChatPanel messages={messages} mode={mode} onExample={send} loading={loading} elapsed={elapsed} />
+            <ChatPanel messages={messages} mode={mode} onExample={send} loading={loading} elapsed={elapsed} displayName={displayName} />
           </div>
 
           {/* 

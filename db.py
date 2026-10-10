@@ -27,12 +27,13 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Create tables if they don't exist. Call once at startup."""
+    """Create tables if they don't exist and run migrations."""
     with _connect() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id         TEXT PRIMARY KEY,
                 title      TEXT NOT NULL,
+                user_email TEXT DEFAULT '',
                 created_at TEXT NOT NULL
             );
 
@@ -48,6 +49,11 @@ def init_db() -> None:
                 ON messages(session_id);
         """)
 
+        # Migration: ensure user_email exists in existing databases
+        columns = [col[1] for col in conn.execute("PRAGMA table_info(sessions)").fetchall()]
+        if "user_email" not in columns:
+            conn.execute("ALTER TABLE sessions ADD COLUMN user_email TEXT DEFAULT ''")
+
 
 # ── Sessions ────────────────────────────────────────────────────────────────
 
@@ -59,21 +65,27 @@ def session_exists(session_id: str) -> bool:
         return row is not None
 
 
-def create_session(session_id: str, title: str) -> None:
+def create_session(session_id: str, title: str, user_email: str = "") -> None:
     now = datetime.now().isoformat()
     with _connect() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO sessions (id, title, created_at) VALUES (?, ?, ?)",
-            (session_id, title, now),
+            "INSERT OR IGNORE INTO sessions (id, title, user_email, created_at) VALUES (?, ?, ?, ?)",
+            (session_id, title, user_email or "", now),
         )
 
 
-def get_all_sessions() -> list[dict]:
-    """Return all sessions, newest first."""
+def get_all_sessions(user_email: str | None = None) -> list[dict]:
+    """Return sessions filtered by user_email (or guest sessions if None), newest first."""
     with _connect() as conn:
-        rows = conn.execute(
-            "SELECT id, title, created_at FROM sessions ORDER BY created_at DESC"
-        ).fetchall()
+        if user_email:
+            rows = conn.execute(
+                "SELECT id, title, created_at, user_email FROM sessions WHERE user_email = ? ORDER BY created_at DESC",
+                (user_email,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, title, created_at, user_email FROM sessions WHERE user_email = '' OR user_email IS NULL ORDER BY created_at DESC"
+            ).fetchall()
         return [dict(r) for r in rows]
 
 

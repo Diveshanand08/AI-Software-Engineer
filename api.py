@@ -67,6 +67,7 @@ class AskRequest(BaseModel):
     k: int = 4
     session_id: str | None = None
     provider: str = "ollama"
+    user_email: str | None = None
 
 class ExplainRequest(BaseModel):
     collection: str
@@ -74,6 +75,7 @@ class ExplainRequest(BaseModel):
     model: str = "phi3"
     k: int = 4
     provider: str = "ollama"
+    user_email: str | None = None
 
 class AnswerResponse(BaseModel):
     answer: str
@@ -124,9 +126,9 @@ def providers():
 # ── Session endpoints ──────────────────────────────────────────────────────
 
 @app.get("/sessions")
-def list_sessions():
-    """Returns metadata for all sessions (persistent across restarts)."""
-    return get_all_sessions()
+def list_sessions(user_email: str | None = None):
+    """Returns metadata for sessions filtered by user_email."""
+    return get_all_sessions(user_email=user_email)
 
 
 @app.get("/sessions/{session_id}")
@@ -173,7 +175,7 @@ def ask_endpoint(req: AskRequest):
     if not session_id or not session_exists(session_id):
         session_id = str(uuid.uuid4())
         title = req.question[:30] + "..." if len(req.question) > 30 else req.question
-        create_session(session_id, title)
+        create_session(session_id, title, user_email=req.user_email or "")
 
     # 2. Persist the user's question immediately
     append_message(session_id, "user", req.question)
