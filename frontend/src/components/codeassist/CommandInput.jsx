@@ -31,7 +31,7 @@ export function CommandInput({ value, onChange, onSubmit, disabled, mode }) {
   return (
     <div className="w-full px-4 md:px-8 mx-auto max-w-3xl">
       <div 
-        className="relative flex flex-col w-full rounded-[32px] p-3 shadow-2xl border border-white/5 transition-all focus-within:border-white/10"
+        className="relative flex flex-col w-full rounded-4xl p-3 shadow-2xl border border-white/5 transition-all focus-within:border-white/10"
         style={{ backgroundColor: '#1e1f22' }} 
       >
         {/* TOP ROW: Text Area */}
@@ -46,7 +46,7 @@ export function CommandInput({ value, onChange, onSubmit, disabled, mode }) {
           placeholder="Ask anything about your codebase..."
           spellCheck={false}
           disabled={disabled}
-          className="w-full max-h-[200px] min-h-[24px] bg-transparent resize-none outline-none text-gray-100 placeholder:text-gray-400 px-3 pt-2 pb-4 text-[15px] leading-relaxed custom-scrollbar disabled:opacity-50"
+          className="w-full max-h-50 min-h-6 bg-transparent resize-none outline-none text-gray-100 placeholder:text-gray-400 px-3 pt-2 pb-4 text-[15px] leading-relaxed custom-scrollbar disabled:opacity-50"
         />
         
         {/* BOTTOM ROW: Toolbar Options */}

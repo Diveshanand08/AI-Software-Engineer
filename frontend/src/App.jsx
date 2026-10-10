@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Command, GitBranch, Settings2, Menu } from 'lucide-react'
 import { Sidebar } from './components/codeassist/Sidebar.jsx'
 import { ChatPanel } from './components/codeassist/ChatPanel.jsx'
@@ -15,6 +15,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const [activeSessionId, setActiveSessionId] = useState(null)
+  const skipSessionLoadRef = useRef(false)
   const [messages, setMessages] = useState([])
   const [historyList, setHistoryList] = useState([]) 
 
@@ -51,6 +52,10 @@ function handleProviderChange(p) {
   }, [fetchHistory])
 
   useEffect(() => {
+    if (skipSessionLoadRef.current) {
+      skipSessionLoadRef.current = false
+      return
+    }
     if (!activeSessionId) {
       setMessages([]) 
       return
@@ -130,9 +135,13 @@ function handleProviderChange(p) {
           body: JSON.stringify(body),
         })
 
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(errText || `Server error: ${res.status}`)
+        }
+
         const msgId = crypto.randomUUID()
         appendMessage({ id: msgId, role: 'assistant', content: '' })
-        setLoading(false) 
 
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
@@ -146,6 +155,7 @@ function handleProviderChange(p) {
           
           const sessionMatch = buffer.match(/__SESSION_ID__:(.+?)\n\n/)
           if (sessionMatch) {
+            skipSessionLoadRef.current = true
             setActiveSessionId(sessionMatch[1])
             buffer = buffer.replace(sessionMatch[0], '')
             fetchHistory() 

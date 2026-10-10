@@ -182,12 +182,12 @@ def ask_endpoint(req: AskRequest):
             err = f"\n\n**Error ({req.provider}):** {e}"
             full_ai_response += err
             yield err
-
-        # Save the complete AI answer to history
-        CHAT_SESSIONS[session_id]["messages"].append({
-            "role": "ai",
-            "content": full_ai_response
-        })
+        finally:
+            if full_ai_response:
+                CHAT_SESSIONS[session_id]["messages"].append({
+                    "role": "ai",
+                    "content": full_ai_response
+                })
 
     return StreamingResponse(
         stream_and_save(),
