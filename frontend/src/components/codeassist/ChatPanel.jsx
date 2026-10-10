@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Sparkles, Check, Copy } from 'lucide-react'
+import { Sparkles, Check, Copy, Clock } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -87,7 +87,14 @@ function MessageBubble({ message }) {
   )
 }
 
-export function ChatPanel({ messages = [], onExample, loading, displayName = 'User' }) {
+export function ChatPanel({
+  messages = [],
+  onExample,
+  loading,
+  displayName = 'User',
+  historyList = [],
+  onSelectSession
+}) {
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -97,8 +104,8 @@ export function ChatPanel({ messages = [], onExample, loading, displayName = 'Us
 
   if (messages.length === 0 && !loading) {
     return (
-      <div className="flex h-full flex-col px-4 pt-16 md:pt-24 max-w-200 mx-auto overflow-y-auto">
-        <div className="mb-12">
+      <div className="flex h-full flex-col px-4 pt-16 md:pt-24 max-w-200 mx-auto overflow-y-auto custom-scrollbar pb-32">
+        <div className="mb-10">
           <h1 className="text-[44px] font-medium leading-tight bg-linear-to-r from-[#4285f4] via-[#d96570] to-[#f4b400] text-transparent bg-clip-text">
             Hello, {displayName}
           </h1>
@@ -106,6 +113,26 @@ export function ChatPanel({ messages = [], onExample, loading, displayName = 'Us
             How can I help you today?
           </h2>
         </div>
+
+        {/* Quick-Access Recent History Chips */}
+        {historyList && historyList.length > 0 && (
+          <div className="mb-8">
+            <h3 className="mb-2.5 text-xs font-mono uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-blue-400" /> Recent Conversations
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {historyList.slice(0, 5).map((session) => (
+                <button
+                  key={session.id}
+                  onClick={() => onSelectSession && onSelectSession(session.id)}
+                  className="flex items-center gap-2 rounded-xl bg-[#1e1f20] hover:bg-[#282a2c] px-3.5 py-2 text-xs font-mono text-gray-300 border border-white/5 hover:border-blue-500/30 hover:text-white transition-all shadow-sm active:scale-95"
+                >
+                  <span className="truncate max-w-[220px]">{session.title || 'Conversation'}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {[

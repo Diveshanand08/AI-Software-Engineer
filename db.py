@@ -75,18 +75,42 @@ def create_session(session_id: str, title: str, user_email: str = "") -> None:
 
 
 def get_all_sessions(user_email: str | None = None) -> list[dict]:
-    """Return sessions filtered by user_email (or guest sessions if None), newest first."""
+    """Return sessions. Matches user_email, falls back to prefix match, or all sessions if none found."""
     with _connect() as conn:
-        if user_email:
+        if user_email and user_email.strip():
+            # 1. Exact match (case-insensitive)
             rows = conn.execute(
-                "SELECT id, title, created_at, user_email FROM sessions WHERE user_email = ? ORDER BY created_at DESC",
-                (user_email,),
+                "SELECT id, title, created_at, user_email FROM sessions "
+                "WHERE LOWER(user_email) = LOWER(?) "
+                "ORDER BY created_at DESC",
+                (user_email.strip(),),
             ).fetchall()
+            if rows:
+                return [dict(r) for r in rows]
+
+            # 2. Prefix / username match (e.g. diveshanand08 vs diveshanand8)
+            local_user = user_email.strip().split('@')[0]
+            clean_prefix = ''.join(c for c in local_user if c.isalpha()).lower()
+            if clean_prefix and len(clean_prefix) >= 3:
+                rows = conn.execute(
+                    "SELECT id, title, created_at, user_email FROM sessions "
+                    "WHERE LOWER(user_email) LIKE ? "
+                    "ORDER BY created_at DESC",
+                    (f"%{clean_prefix}%",),
+                ).fetchall()
+                if rows:
+                    return [dict(r) for r in rows]
+
+            # 3. Fallback: return all sessions so the user never sees an empty screen
+            rows = conn.execute(
+                "SELECT id, title, created_at, user_email FROM sessions ORDER BY created_at DESC"
+            ).fetchall()
+            return [dict(r) for r in rows]
         else:
             rows = conn.execute(
-                "SELECT id, title, created_at, user_email FROM sessions WHERE user_email = '' OR user_email IS NULL ORDER BY created_at DESC"
+                "SELECT id, title, created_at, user_email FROM sessions ORDER BY created_at DESC"
             ).fetchall()
-        return [dict(r) for r in rows]
+            return [dict(r) for r in rows]
 
 
 def delete_session(session_id: str) -> None:

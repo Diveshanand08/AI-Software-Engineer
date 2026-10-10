@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react'
 
 export function ModelPicker({ apiBase, value, onChange }) {
-  const [options, setOptions] = useState([{ id: 'ollama', label: 'Local (phi3)' }])
+  const [options, setOptions] = useState([
+    { id: 'ollama', label: 'Local (phi3)' },
+    { id: 'gemini', label: 'Google Gemini Flash' }
+  ])
 
- useEffect(() => {
-  fetch(`${apiBase}/providers`)
-    .then((r) => r.json())
-    .then((list) => {
-      if (!Array.isArray(list) || list.length === 0) return  // ignore bad responses
-      setOptions(list)
-      if (!list.some((o) => o.id === value)) onChange(list[0].id)
-    })
-    .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [apiBase])
+  useEffect(() => {
+    let active = true
+    fetch(`${apiBase}/providers`)
+      .then((r) => r.json())
+      .then((list) => {
+        if (!active || !Array.isArray(list) || list.length === 0) return
+        setOptions(list)
+        if (value && !list.some((o) => o.id === value)) {
+          onChange(list[0].id)
+        }
+      })
+      .catch((err) => console.error('Failed to load providers:', err))
+    return () => { active = false }
+  }, [apiBase])
 
   return (
     <select

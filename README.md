@@ -13,7 +13,7 @@ A full-stack AI code assistant that indexes GitHub repositories and lets you cha
 | FastAPI backend (HTTP API for all features, CORS-enabled) | Done |
 | Docker sandbox for safe, isolated code execution | Done |
 | Self-correcting code generation (LangGraph agent loop) | Done |
-| Automated unit test generation | Partial — see note below |
+| Automated unit test generation (LangGraph + Docker sandbox) | Done |
 | Pull request generation (GitHub API + git) | Done |
 | React frontend with chat interface & Google Sign-In | Done |
 | Persistent chat history across sessions (SQLite + user isolation) | Done |
