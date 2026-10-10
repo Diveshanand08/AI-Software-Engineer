@@ -6,7 +6,7 @@ import { ChatPanel } from './components/codeassist/ChatPanel.jsx'
 import { CommandInput } from './components/codeassist/CommandInput.jsx'
 import { ModelPicker } from './components/codeassist/ModelPicker.jsx'
 import { useAuth } from './lib/useAuth.js'
-const API_BASE = 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 const MODE_TITLE = {
   chat: 'Chat',
   explain: 'Explain',
