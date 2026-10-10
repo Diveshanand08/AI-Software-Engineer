@@ -2,8 +2,8 @@
 api.py
 FastAPI backend exposing the code assistant's core features as HTTP endpoints:
   POST /index    - index a repo (local path or git URL)
-  POST /ask      - free-form Q&A about an indexed repo
-  POST /explain  - structured explanation of a function/class
+  POST /ask      - free-form Q&A about an indexed repo (streaming)
+  POST /explain  - structured explanation of a function/class (streaming)
   POST /bugs     - run bug detection on a specific file
 
 Usage:
@@ -14,7 +14,6 @@ Then visit http://localhost:8000/docs for interactive Swagger UI.
 
 import shutil
 import uuid
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -22,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 
+from db import init_db, session_exists, create_session, get_all_sessions, get_messages, append_message, delete_session
 from indexer import clone_repo, collect_documents, build_index
 from chat import ask as chat_ask, explain as chat_explain
 from llm import available_providers
@@ -31,7 +31,7 @@ from chat import ask_stream, explain_stream
 app = FastAPI(
     title="AI Code Assistant API",
     description="RAG-based code assistant: index repos, chat, explain functions, find bugs.",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -42,10 +42,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---- global storage ----
-# In-memory storage for chat sessions
-# Structure: { "session_id": { "id": "...", "title": "...", "created_at": "...", "messages": [...] } }
-CHAT_SESSIONS = {}
+
+@app.on_event("startup")
+def startup():
+    """Initialize the SQLite database on server start."""
+    init_db()
+    print("[db] SQLite chat history database ready.")
+
 
 # ---- request/response models ----
 class IndexRequest(BaseModel):
@@ -62,14 +65,15 @@ class AskRequest(BaseModel):
     question: str
     model: str = "phi3"
     k: int = 4
-    session_id: str | None = None  # Frontend will pass this to continue a chat
-    provider: str = "ollama"   
+    session_id: str | None = None
+    provider: str = "ollama"
+
 class ExplainRequest(BaseModel):
     collection: str
     target: str
     model: str = "phi3"
     k: int = 4
-    provider: str = "ollama"  
+    provider: str = "ollama"
 
 class AnswerResponse(BaseModel):
     answer: str
@@ -80,6 +84,7 @@ class BugRequest(BaseModel):
 
 class BugResponse(BaseModel):
     analysis: str
+
 
 # ---- background tasks ----
 def run_indexing_task(name: str, repo_url: str | None = None, local_path: str | None = None):
@@ -110,27 +115,37 @@ def run_indexing_task(name: str, repo_url: str | None = None, local_path: str | 
 @app.get("/")
 def root():
     return {"status": "ok", "service": "AI Code Assistant API"}
+
 @app.get("/providers")
 def providers():
     return available_providers()
 
+
+# ── Session endpoints ──────────────────────────────────────────────────────
+
 @app.get("/sessions")
-def get_all_sessions():
-    """Returns metadata for all sessions to populate the sidebar."""
-    sessions_list = [
-        {"id": sid, "title": data["title"], "created_at": data["created_at"]}
-        for sid, data in CHAT_SESSIONS.items()
-    ]
-    # Sort newest first
-    sessions_list.sort(key=lambda x: x["created_at"], reverse=True)
-    return sessions_list
+def list_sessions():
+    """Returns metadata for all sessions (persistent across restarts)."""
+    return get_all_sessions()
+
 
 @app.get("/sessions/{session_id}")
-def get_session_messages(session_id: str):
-    """Returns the full message array for a specific session."""
-    if session_id not in CHAT_SESSIONS:
+def get_session(session_id: str):
+    """Returns the full message history for a specific session."""
+    if not session_exists(session_id):
         raise HTTPException(404, "Session not found")
-    return CHAT_SESSIONS[session_id]["messages"]
+    return get_messages(session_id)
+
+
+@app.delete("/sessions/{session_id}", status_code=204)
+def delete_session_endpoint(session_id: str):
+    """Deletes a session and all its messages."""
+    if not session_exists(session_id):
+        raise HTTPException(404, "Session not found")
+    delete_session(session_id)
+
+
+# ── Core endpoints ─────────────────────────────────────────────────────────
 
 @app.post("/index", response_model=IndexResponse)
 def index_repo(req: IndexRequest, background_tasks: BackgroundTasks):
@@ -146,33 +161,25 @@ def index_repo(req: IndexRequest, background_tasks: BackgroundTasks):
 
     target = req.repo_url if req.repo_url else req.local_path
     return IndexResponse(
-        status="success", 
+        status="success",
         message=f"Started indexing {target} in the background. This may take a few minutes."
     )
 
+
 @app.post("/ask")
 def ask_endpoint(req: AskRequest):
-    # 1. Handle Session ID creation or retrieval
+    # 1. Resolve or create session in SQLite
     session_id = req.session_id
-    if not session_id or session_id not in CHAT_SESSIONS:
+    if not session_id or not session_exists(session_id):
         session_id = str(uuid.uuid4())
         title = req.question[:30] + "..." if len(req.question) > 30 else req.question
-        CHAT_SESSIONS[session_id] = {
-            "id": session_id,
-            "title": title,
-            "created_at": datetime.now().isoformat(),
-            "messages": []
-        }
+        create_session(session_id, title)
 
-    # 2. Save the user's question to history immediately
-    CHAT_SESSIONS[session_id]["messages"].append({
-        "role": "user",
-        "content": req.question
-    })
+    # 2. Persist the user's question immediately
+    append_message(session_id, "user", req.question)
 
-    # 3. Wrapper generator to capture the streamed output
+    # 3. Stream AI response, persist on completion
     def stream_and_save():
-        # Tell the frontend the session_id first
         yield f"__SESSION_ID__:{session_id}\n\n"
 
         full_ai_response = ""
@@ -190,22 +197,18 @@ def ask_endpoint(req: AskRequest):
             yield err
         finally:
             if full_ai_response:
-                CHAT_SESSIONS[session_id]["messages"].append({
-                    "role": "ai",
-                    "content": full_ai_response
-                })
+                append_message(session_id, "ai", full_ai_response)
 
-    return StreamingResponse(
-        stream_and_save(),
-        media_type="text/plain"
-    )
+    return StreamingResponse(stream_and_save(), media_type="text/plain")
+
 
 @app.post("/explain")
 def explain_endpoint(req: ExplainRequest):
     return StreamingResponse(
-        explain_stream(req.collection, req.target, model=req.model, k=req.k),
+        explain_stream(req.collection, req.target, model=req.model, k=req.k, provider=req.provider),
         media_type="text/plain"
     )
+
 
 @app.post("/bugs", response_model=BugResponse)
 def bugs_endpoint(req: BugRequest):

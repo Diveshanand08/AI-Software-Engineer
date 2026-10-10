@@ -107,6 +107,19 @@ function handleProviderChange(p) {
     }
   }
 
+  async function handleDeleteSession(id) {
+    try {
+      await fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' })
+      if (activeSessionId === id) {
+        setActiveSessionId(null)
+        setMessages([])
+      }
+      fetchHistory()
+    } catch (e) {
+      console.error('Failed to delete session:', e)
+    }
+  }
+
   async function send(text) {
     const trimmed = text.trim()
     if (!trimmed || loading) return
@@ -203,12 +216,13 @@ function handleProviderChange(p) {
         activeSessionId={activeSessionId}
         onSelectSession={(id) => {
           setActiveSessionId(id)
-          setIsSidebarOpen(false) // Close sidebar when choosing a chat
+          setIsSidebarOpen(false)
         }}
         onNewChat={() => {
           setActiveSessionId(null)
-          setIsSidebarOpen(false) // Close sidebar when starting new chat
+          setIsSidebarOpen(false)
         }}
+        onDeleteSession={handleDeleteSession}
       />
 
       {/* Ensure the main container does NOT scroll by adding relative, h-full, and overflow-hidden */}

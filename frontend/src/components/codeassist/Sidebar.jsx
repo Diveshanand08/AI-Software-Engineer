@@ -1,4 +1,4 @@
-import { MessagesSquare, FileCode2, Bug, Database, Github, FolderGit2, Loader2, Bot, Plus, Clock, X } from 'lucide-react'
+import { MessagesSquare, FileCode2, Bug, Database, Github, FolderGit2, Loader2, Bot, Plus, Clock, X, Trash2 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
 const NAV_ITEMS = [
@@ -23,7 +23,8 @@ export function Sidebar({
   historyList = [],
   activeSessionId,
   onSelectSession,
-  onNewChat
+  onNewChat,
+  onDeleteSession
 }) {
   return (
     <>
@@ -173,18 +174,34 @@ export function Sidebar({
                 </div>
               ) : (
                 historyList.map(session => (
-                  <button
+                  <div
                     key={session.id}
-                    onClick={() => onSelectSession(session.id)}
                     className={cn(
-                      'w-full truncate rounded-md px-3 py-2 text-left font-mono text-[11px] transition-colors',
+                      'group flex items-center gap-1 rounded-md transition-colors',
                       activeSessionId === session.id
-                        ? 'bg-blue-500/10 font-medium text-blue-400'
-                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                        ? 'bg-blue-500/10'
+                        : 'hover:bg-white/5'
                     )}
                   >
-                    {session.title || 'New Conversation'}
-                  </button>
+                    <button
+                      onClick={() => onSelectSession(session.id)}
+                      className={cn(
+                        'flex-1 truncate px-3 py-2 text-left font-mono text-[11px] transition-colors',
+                        activeSessionId === session.id
+                          ? 'font-medium text-blue-400'
+                          : 'text-gray-400 group-hover:text-gray-200'
+                      )}
+                    >
+                      {session.title || 'New Conversation'}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id) }}
+                      title="Delete conversation"
+                      className="mr-1 shrink-0 rounded p-1 text-gray-600 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>
