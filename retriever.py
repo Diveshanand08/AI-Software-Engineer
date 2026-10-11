@@ -40,13 +40,48 @@ def load_retriever(collection_name: str, k: int = 4):
     return vectordb.as_retriever(search_kwargs={"k": k})
 
 
-def retrieve(collection_name: str, query: str, k: int = 3):
-    """Run a query against the index, return a list of (content, metadata) results."""
-    retriever = load_retriever(collection_name, k=k)
-    results = retriever.invoke(query)
+def is_broad_query(query: str) -> bool:
+    """Check if query is general/architectural rather than targeting a specific function."""
+    q = query.lower().strip()
+    broad_keywords = [
+        "explain the code", "explain code", "explain the project", "explain this repo",
+        "what does this do", "what does this project do", "what does this code do",
+        "overview", "architecture", "structure", "summary", "summarize",
+        "how does this work", "how does the project work", "how does it work",
+        "walk me through", "introduce", "tell me about this", "what is this repo"
+    ]
+    if len(q.split()) <= 4 and any(w in q for w in ["explain", "code", "repo", "project", "work", "what", "how", "all"]):
+        return True
+    return any(bk in q for bk in broad_keywords)
 
+
+def retrieve(collection_name: str, query: str, k: int = 6):
+    """Run a query against the index, return a list of (content, metadata) results.
+    
+    If query is broad or general, automatically expands search to include architecture/overview
+    and increases k to provide comprehensive context.
+    """
+    broad = is_broad_query(query)
+    effective_k = max(k, 8) if broad else k
+
+    retriever = load_retriever(collection_name, k=effective_k)
+    raw_results = retriever.invoke(query)
+
+    if broad:
+        try:
+            extra = retriever.invoke("overview architecture main entrypoint workflow summary")
+            raw_results.extend(extra)
+        except Exception:
+            pass
+
+    # Deduplicate while preserving rank order
+    seen = set()
     formatted = []
-    for doc in results:
+    for doc in raw_results:
+        key = (doc.metadata.get("file"), doc.metadata.get("name"), doc.metadata.get("start_line"))
+        if key in seen:
+            continue
+        seen.add(key)
         formatted.append(
             {
                 "content": doc.page_content,
@@ -57,6 +92,9 @@ def retrieve(collection_name: str, query: str, k: int = 3):
                 "end_line": doc.metadata.get("end_line"),
             }
         )
+        if len(formatted) >= effective_k:
+            break
+
     return formatted
 
 

@@ -156,6 +156,22 @@ def chunk_python_file(filepath: Path, repo_root: Path) -> list[Document]:
     lines = source.splitlines()
     rel_path = filepath.relative_to(repo_root)
 
+    # Capture module-level docstring or overview if present
+    docstring = ast.get_docstring(tree)
+    if docstring and len(docstring.strip()) > 20:
+        chunks.append(
+            Document(
+                page_content=f"# Module {rel_path}\n\"\"\"\n{docstring.strip()}\n\"\"\"",
+                metadata={
+                    "file": str(rel_path),
+                    "name": f"{filepath.stem} (module)",
+                    "type": "ModuleDoc",
+                    "start_line": 1,
+                    "end_line": len(docstring.splitlines()) + 2,
+                },
+            )
+        )
+
     top_level_nodes = [
         node for node in ast.walk(tree)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
