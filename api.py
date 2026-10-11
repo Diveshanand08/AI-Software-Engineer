@@ -108,10 +108,7 @@ def run_indexing_task(name: str, repo_url: str | None = None, local_path: str | 
         build_index(documents, collection_name=name)
         print(f"[background] Successfully indexed '{name}'!")
 
-        # Clean up temporary clone if it was cloned from a remote git URL
-        if repo_url and repo_path.exists():
-            shutil.rmtree(repo_path, ignore_errors=True)
-            print(f"[background] Cleaned up temporary clone at {repo_path}")
+        # Keep cloned repository files available in CLONE_DIR for bug inspection and test generation
     except Exception as e:
         print(f"[background] Indexing failed for '{name}': {e}")
 

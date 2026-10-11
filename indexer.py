@@ -19,6 +19,28 @@ import git
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
+
+class LocalDefaultEmbeddings(Embeddings):
+    """Fallback embedding model using Chroma's built-in ONNX all-MiniLM-L6-v2 model."""
+    def __init__(self):
+        import chromadb.utils.embedding_functions as ef
+        self._fn = ef.DefaultEmbeddingFunction()
+
+    def embed_documents(self, texts):
+        return [list(map(float, v)) for v in self._fn(texts)]
+
+    def embed_query(self, text):
+        return list(map(float, self._fn([text])[0]))
+
+def get_embedding_function():
+    """Return OllamaEmbeddings if Ollama server is running, otherwise fall back to local ONNX embeddings."""
+    try:
+        import urllib.request
+        urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/version", timeout=1)
+        return OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
+    except Exception:
+        return LocalDefaultEmbeddings()
 
 # --- config ---
 CLONE_DIR = Path(os.getenv("CLONE_DIR", "./_cloned_repos"))
@@ -141,7 +163,7 @@ def build_index(documents: list[Document], collection_name: str, batch_size: int
         print("[indexer] No documents to index. Aborting.")
         return
 
-    embeddings = OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
+    embeddings = get_embedding_function()
 
     print(f"[indexer] Embedding {len(documents)} chunks with '{EMBED_MODEL}' in batches of {batch_size} ...")
 

@@ -12,8 +12,8 @@ import argparse
 import os
 from pathlib import Path
 
-from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
+from indexer import get_embedding_function
 
 CHROMA_DIR = Path(os.getenv("CHROMA_DIR", "./chroma_db"))
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
@@ -22,7 +22,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 def load_retriever(collection_name: str, k: int = 4):
     """Load the persisted Chroma collection and return a retriever object."""
-    embeddings = OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
+    embeddings = get_embedding_function()
 
     vectordb = Chroma(
         collection_name=collection_name,
