@@ -61,7 +61,9 @@ def clone_repo(repo_url: str, dest_name: str) -> Path:
         return target
     CLONE_DIR.mkdir(exist_ok=True)
     print(f"[indexer] Cloning {repo_url} into {target} ...")
-    git.Repo.clone_from(repo_url, target, depth=1)
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    git.Repo.clone_from(repo_url, target, depth=1, env=env)
     print("[indexer] Clone complete.")
     return target
 
