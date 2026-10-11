@@ -76,19 +76,13 @@ class LocalDefaultEmbeddings(Embeddings):
         return list(map(float, self._fn([text])[0]))
 
 def get_embedding_function():
-    """Return OllamaEmbeddings if running, otherwise GeminiCloudEmbeddings if API key present, or local ONNX."""
+    """Return OllamaEmbeddings if running locally, otherwise LocalDefaultEmbeddings (zero API quota/rate limits)."""
     try:
         import urllib.request
         urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/version", timeout=1)
         return OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
     except Exception:
         pass
-
-    if os.getenv("GEMINI_API_KEY"):
-        try:
-            return GeminiCloudEmbeddings()
-        except Exception:
-            pass
 
     return LocalDefaultEmbeddings()
 
