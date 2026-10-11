@@ -64,13 +64,17 @@ class GeminiCloudEmbeddings(Embeddings):
         return []
 
 class LocalDefaultEmbeddings(Embeddings):
-    """Fallback embedding model using Chroma's built-in ONNX all-MiniLM-L6-v2 model."""
+    """Fallback embedding model using Chroma's built-in ONNX all-MiniLM-L6-v2 model with micro-batching for ultra-low RAM."""
     def __init__(self):
         import chromadb.utils.embedding_functions as ef
         self._fn = ef.DefaultEmbeddingFunction()
 
     def embed_documents(self, texts):
-        return [list(map(float, v)) for v in self._fn(texts)]
+        results = []
+        for i in range(0, len(texts), 10):
+            sub = texts[i : i + 10]
+            results.extend([list(map(float, v)) for v in self._fn(sub)])
+        return results
 
     def embed_query(self, text):
         return list(map(float, self._fn([text])[0]))
@@ -224,7 +228,7 @@ def collect_documents(repo_path: Path, max_chunks: int = 800) -> list[Document]:
     return all_chunks
 
 
-def build_index(documents: list[Document], collection_name: str, batch_size: int = 50, progress_callback=None):
+def build_index(documents: list[Document], collection_name: str, batch_size: int = 20, progress_callback=None):
     """Embed documents and persist into Chroma, reporting progress via callback."""
     if not documents:
         print("[indexer] No documents to index. Aborting.")
@@ -232,7 +236,7 @@ def build_index(documents: list[Document], collection_name: str, batch_size: int
 
     embeddings = get_embedding_function()
     total = len(documents)
-    print(f"[indexer] Embedding {total} chunks with '{EMBED_MODEL}' in batches of {batch_size} ...")
+    print(f"[indexer] Embedding {total} chunks in batches of {batch_size} ...")
 
     vectordb = None
     for i in range(0, total, batch_size):
