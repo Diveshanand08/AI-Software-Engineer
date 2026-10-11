@@ -35,6 +35,23 @@ export default function App() {
   const [repoUrl, setRepoUrl] = useState('')
   const [isIndexing, setIsIndexing] = useState(false)
   const [provider, setProvider] = useState(() => localStorage.getItem('provider') || 'ollama')
+  const [availableCollections, setAvailableCollections] = useState(['test_repo'])
+
+  const fetchCollections = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/collections`)
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data) && data.length > 0) {
+          setAvailableCollections(data)
+        }
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    fetchCollections()
+  }, [fetchCollections])
 
 function handleProviderChange(p) {
   setProvider(p)
@@ -171,6 +188,8 @@ function handleProviderChange(p) {
               clearInterval(pollTimer)
               setIsIndexing(false)
               setRepoUrl('')
+              setCollection(targetColl)
+              fetchCollections()
               alert(`🎉 Successfully indexed '${targetColl}'! You can now chat and ask questions about this codebase.`)
             } else if (data.status === 'failed') {
               clearInterval(pollTimer)
@@ -378,10 +397,21 @@ function handleProviderChange(p) {
             <h1 className="font-mono text-sm font-semibold tracking-tight text-foreground">
               {MODE_TITLE[mode]}
             </h1>
-            <span className="hidden items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 font-mono text-[11px] text-muted-foreground sm:flex">
-              <span className="text-primary/70">#</span>
-              {collection || 'no-collection'}
-            </span>
+            <div className="hidden sm:flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 py-1 font-mono text-xs text-muted-foreground">
+              <span className="text-blue-400">#</span>
+              <select
+                value={collection}
+                onChange={(e) => setCollection(e.target.value)}
+                className="bg-transparent text-gray-200 outline-none cursor-pointer text-xs font-mono pr-1"
+                title="Select indexed repository collection"
+              >
+                {Array.from(new Set([collection, ...availableCollections])).map((c) => (
+                  <option key={c} value={c} className="bg-[#1e1f20] text-gray-200">
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <button
               onClick={handleNewChat}
