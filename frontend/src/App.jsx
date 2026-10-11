@@ -172,13 +172,14 @@ function handleProviderChange(p) {
 
   async function handleImport() {
     const trimmedUrl = repoUrl.trim()
-    const targetColl = collection.trim().replace(/\s+/g, '_')
+    const targetColl = collection.trim().replace(/\s+/g, '_').replace(/\.[a-zA-Z0-9]+$/, '')
     if (!trimmedUrl || !targetColl || isIndexing) return
 
-    if (trimmedUrl.startsWith('https://github.com/')) {
-      const parts = trimmedUrl.replace('https://github.com/', '').replace(/\.git$/, '').split('/').filter(Boolean)
+    if (trimmedUrl.includes('github.com')) {
+      const pathOnly = trimmedUrl.split('github.com/')[1] || ''
+      const parts = pathOnly.replace(/\.git$/, '').split('/').filter(Boolean)
       if (parts.length < 2) {
-        alert("⚠️ Please provide a complete GitHub repository URL, for example:\nhttps://github.com/username/repository")
+        alert("⚠️ Incomplete GitHub URL!\n\nYou entered a user account link:\n" + trimmedUrl + "\n\nGit cannot clone a user profile. Please provide a full repository URL with the project name, for example:\nhttps://github.com/" + (parts[0] || 'username') + "/repository_name")
         return
       }
     }

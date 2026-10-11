@@ -180,7 +180,7 @@ export function Sidebar({
                 <Github className="absolute left-2.5 top-2 h-3.5 w-3.5 text-gray-500" />
                 <input
                   type="text"
-                  placeholder="https://github.com/.../repo.git"
+                  placeholder="https://github.com/owner/repository"
                   value={repoUrl}
                   onChange={(e) => onRepoUrlChange(e.target.value)}
                   className="w-full rounded-md border border-white/10 bg-[#21262d]/50 py-1.5 pl-8 pr-3 font-mono text-xs text-gray-200 placeholder:text-gray-600 focus:border-blue-500/50 focus:outline-none"
@@ -188,9 +188,9 @@ export function Sidebar({
               </div>
               <input
                 type="text"
-                placeholder="Collection Name (e.g. test_repo)"
+                placeholder="Project Name (e.g. my_project - no .py)"
                 value={collection}
-                onChange={(e) => onCollectionChange(e.target.value.replace(/\s+/g, '_'))}
+                onChange={(e) => onCollectionChange(e.target.value.replace(/\s+/g, '_').replace(/\.[a-zA-Z0-9]+$/, ''))}
                 className="w-full rounded-md border border-white/10 bg-[#21262d]/50 px-3 py-1.5 font-mono text-xs text-gray-200 placeholder:text-gray-600 focus:border-blue-500/50 focus:outline-none"
               />
               {isIndexing ? (
