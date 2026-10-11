@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import ast
+import json
 import os
 import shutil
 from pathlib import Path
@@ -106,7 +107,7 @@ CODE_EXTENSIONS = {
     ".java", ".kt", ".kts", ".dart", ".swift",
     ".go", ".rs", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp",
     ".cs", ".php", ".rb", ".sh", ".bash", ".vue", ".svelte",
-    ".yaml", ".yml", ".toml", ".xml", ".env.example", ".txt"
+    ".yaml", ".yml", ".toml", ".xml", ".env.example", ".txt",".ipynb"
 }
 SPECIAL_FILENAMES = {"dockerfile", "makefile", "jenkinsfile", "procfile", "gemfile", "vagrantfile"}
 IGNORE_DIRS = {
