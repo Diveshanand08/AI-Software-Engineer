@@ -25,12 +25,9 @@ import time
 import uuid
 from pathlib import Path
 
-from dotenv import load_dotenv
-from github import Github, Auth
+from core.config import settings
 
-load_dotenv()
-
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_TOKEN = settings.GITHUB_TOKEN
 
 
 def run_git(args: list[str], cwd: str = "."):

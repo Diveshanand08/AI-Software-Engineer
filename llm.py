@@ -1,97 +1,121 @@
-import os
-import ollama
-from openai import OpenAI
-from dotenv import load_dotenv
+"""
+services/llm.py & llm.py
+Multi-provider LLM abstraction layer supporting local Ollama, Groq (Llama 3.3), and Google Gemini.
+Handles both full generation and streaming with standardized error handling.
+"""
 
-load_dotenv()
+from openai import OpenAI
+from core.config import settings
+from core.exceptions import ProviderUnavailableError
 
 PROVIDERS = {
     "ollama": {
         "label": "Local (phi3)",
-        "model": "phi3",
+        "model": settings.DEFAULT_OLLAMA_MODEL,
     },
     "groq": {
         "label": "Groq (Llama 3.3 70B)",
         "model": "llama-3.3-70b-versatile",
         "base_url": "https://api.groq.com/openai/v1",
-        "key_env": "GROQ_API_KEY",
+        "key": lambda: settings.GROQ_API_KEY,
+        "key_name": "GROQ_API_KEY",
     },
     "gemini": {
         "label": "Google Gemini Flash",
-        "model": "gemini-3.8-flash",
+        "model": "gemini-2.5-flash",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "key_env": "GEMINI_API_KEY",
+        "key": lambda: settings.GEMINI_API_KEY,
+        "key_name": "GEMINI_API_KEY",
     },
 }
 
 
-def available_providers():
-    """Ollama is always listed. Others appear only if their API key is set in .env."""
+def available_providers() -> list[dict]:
+    """Returns list of active providers. Cloud providers appear only if API keys are set."""
     out = []
     for pid, cfg in PROVIDERS.items():
-        if pid == "ollama" or os.getenv(cfg.get("key_env", "")):
+        if pid == "ollama":
+            out.append({"id": pid, "label": cfg["label"]})
+        elif "key" in cfg and cfg["key"]():
             out.append({"id": pid, "label": cfg["label"]})
     return out
 
 
-def _get_cfg(provider):
-    cfg = PROVIDERS.get(provider)
+def _get_cfg(provider: str) -> dict:
+    cfg = PROVIDERS.get(provider.lower())
     if cfg is None:
-        raise ValueError(f"Unknown provider: {provider}")
+        raise ProviderUnavailableError(provider, f"Unknown provider '{provider}'")
     return cfg
 
 
-def _hosted_client(cfg):
-    api_key = os.getenv(cfg["key_env"])
+def _hosted_client(cfg: dict) -> OpenAI:
+    api_key = cfg["key"]()
     if not api_key:
-        raise ValueError(f"{cfg['key_env']} is missing in .env")
+        raise ProviderUnavailableError(
+            cfg.get("key_name", "API Key"),
+            f"Environment variable '{cfg.get('key_name')}' is missing or empty.",
+        )
     return OpenAI(api_key=api_key, base_url=cfg["base_url"])
 
 
-def generate(messages, provider="ollama", ollama_model=None):
-    """Full answer at once. messages = [{"role": "...", "content": "..."}]"""
+def generate(messages: list[dict], provider: str = "ollama", ollama_model: str | None = None) -> str:
+    """Generate a complete text completion using the specified provider."""
     cfg = _get_cfg(provider)
 
     if provider == "ollama":
-        res = ollama.chat(
-            model=ollama_model or cfg["model"],
-            messages=messages,
-            options={"num_predict": 400, "num_ctx": 2048, "temperature": 0.2},
-            keep_alive="30m",
-        )
-        return res["message"]["content"]
+        try:
+            import ollama
+            res = ollama.chat(
+                model=ollama_model or cfg["model"],
+                messages=messages,
+                options={"num_predict": 600, "num_ctx": 2048, "temperature": 0.2},
+                keep_alive="30m",
+            )
+            return res["message"]["content"]
+        except Exception as e:
+            raise ProviderUnavailableError("ollama", str(e))
 
     client = _hosted_client(cfg)
-    res = client.chat.completions.create(
-        model=cfg["model"], messages=messages, max_tokens=800, temperature=0.2
-    )
-    return res.choices[0].message.content
+    try:
+        res = client.chat.completions.create(
+            model=cfg["model"], messages=messages, max_tokens=1200, temperature=0.2
+        )
+        return res.choices[0].message.content or ""
+    except Exception as e:
+        raise ProviderUnavailableError(provider, str(e))
 
 
-def generate_stream(messages, provider="ollama", ollama_model=None):
-    """Yields the answer piece by piece."""
+def generate_stream(messages: list[dict], provider: str = "ollama", ollama_model: str | None = None):
+    """Yield token chunks sequentially from the selected provider."""
     cfg = _get_cfg(provider)
 
     if provider == "ollama":
-        stream = ollama.chat(
-            model=ollama_model or cfg["model"],
+        try:
+            import ollama
+            stream = ollama.chat(
+                model=ollama_model or cfg["model"],
+                messages=messages,
+                options={"num_predict": 600, "num_ctx": 2048, "temperature": 0.2},
+                keep_alive="30m",
+                stream=True,
+            )
+            for part in stream:
+                yield part["message"]["content"]
+            return
+        except Exception as e:
+            raise ProviderUnavailableError("ollama", str(e))
+
+    client = _hosted_client(cfg)
+    try:
+        stream = client.chat.completions.create(
+            model=cfg["model"],
             messages=messages,
-            options={"num_predict": 400, "num_ctx": 2048, "temperature": 0.2},
-            keep_alive="30m",
+            max_tokens=1500,
+            temperature=0.2,
             stream=True,
         )
-        for part in stream:
-            yield part["message"]["content"]
-        return
-
-    client = _hosted_client(cfg)
-    stream = client.chat.completions.create(
-        model=cfg["model"],
-        messages=messages,
-        max_tokens=800,
-        temperature=0.2,
-        stream=True,
-    )
-    for chunk in stream:
-        if chunk.choices and chunk.choices[0].delta.content:
-            yield chunk.choices[0].delta.content
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+    except Exception as e:
+        raise ProviderUnavailableError(provider, str(e))

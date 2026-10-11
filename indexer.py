@@ -90,11 +90,13 @@ def get_embedding_function():
 
     return LocalDefaultEmbeddings()
 
+from core.config import settings
+
 # --- config ---
-CLONE_DIR = Path(os.getenv("CLONE_DIR", "./_cloned_repos"))
-CHROMA_DIR = Path(os.getenv("CHROMA_DIR", "./chroma_db"))
-EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+CLONE_DIR = settings.CLONE_DIR
+CHROMA_DIR = settings.CHROMA_DIR
+EMBED_MODEL = settings.EMBED_MODEL
+OLLAMA_BASE_URL = settings.OLLAMA_BASE_URL
 
 # file extensions worth indexing
 CODE_EXTENSIONS = {
