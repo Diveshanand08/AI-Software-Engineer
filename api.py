@@ -227,6 +227,16 @@ def index_repo(req: IndexRequest, background_tasks: BackgroundTasks):
         if not repo_path.exists():
             raise HTTPException(404, f"Local path not found: {req.local_path}")
 
+    safe_name = sanitize_collection_name(req.name)
+    initial_msg = f"Queued: Cloning and analyzing {req.repo_url or safe_name}..."
+    INDEX_STATUS[req.name] = {"status": "in_progress", "message": initial_msg}
+    INDEX_STATUS[safe_name] = INDEX_STATUS[req.name]
+    try:
+        set_index_status(req.name, "in_progress", message=initial_msg)
+        set_index_status(safe_name, "in_progress", message=initial_msg)
+    except Exception:
+        pass
+
     background_tasks.add_task(run_indexing_task, req.name, req.repo_url, req.local_path)
 
     target = req.repo_url if req.repo_url else req.local_path
