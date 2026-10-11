@@ -97,7 +97,16 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 # file extensions worth indexing
-CODE_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs", ".cpp", ".c", ".h"}
+CODE_EXTENSIONS = {
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
+    ".html", ".htm", ".css", ".scss", ".sass", ".less",
+    ".json", ".md", ".markdown", ".sql", ".prisma",
+    ".java", ".kt", ".kts", ".dart", ".swift",
+    ".go", ".rs", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp",
+    ".cs", ".php", ".rb", ".sh", ".bash", ".vue", ".svelte",
+    ".yaml", ".yml", ".toml", ".xml", ".env.example", ".txt"
+}
+SPECIAL_FILENAMES = {"dockerfile", "makefile", "jenkinsfile", "procfile", "gemfile", "vagrantfile"}
 IGNORE_DIRS = {
     ".git", "node_modules", "venv", "__pycache__", ".venv", "dist", "build",
     "_cloned_repos", "chroma_db", ".next", "out", ".output", ".cache",
@@ -107,11 +116,19 @@ IGNORE_DIRS = {
 
 
 def clone_repo(repo_url: str, dest_name: str) -> Path:
-    """Clone a repo to CLONE_DIR/dest_name. Skips if already cloned."""
+    """Clone a repo to CLONE_DIR/dest_name. Re-clones if directory is empty."""
     target = CLONE_DIR / dest_name
     if target.exists():
-        print(f"[indexer] Repo already cloned at {target}, skipping clone.")
-        return target
+        try:
+            has_files = any(target.iterdir())
+        except Exception:
+            has_files = False
+        if has_files:
+            print(f"[indexer] Repo already cloned at {target}, skipping clone.")
+            return target
+        else:
+            shutil.rmtree(target, ignore_errors=True)
+
     CLONE_DIR.mkdir(exist_ok=True)
     print(f"[indexer] Cloning {repo_url} into {target} ...")
     env = os.environ.copy()
@@ -205,10 +222,11 @@ def collect_documents(repo_path: Path, max_chunks: int = 800) -> list[Document]:
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
         for fname in files:
             fpath = Path(root) / fname
-            if fpath.suffix not in CODE_EXTENSIONS:
-                continue
             lower_name = fname.lower()
-            if lower_name.endswith(".min.js") or lower_name.endswith(".bundle.js") or lower_name.endswith(".d.ts") or lower_name.endswith(".min.css"):
+            ext = fpath.suffix.lower()
+            if ext not in CODE_EXTENSIONS and lower_name not in SPECIAL_FILENAMES:
+                continue
+            if lower_name.endswith(".min.js") or lower_name.endswith(".bundle.js") or lower_name.endswith(".d.ts") or lower_name.endswith(".min.css") or lower_name.endswith(".map"):
                 continue
 
             file_count += 1
