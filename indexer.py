@@ -21,6 +21,28 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
+class GeminiCloudEmbeddings(Embeddings):
+    """Zero-memory cloud embeddings using Gemini's API."""
+    def __init__(self):
+        from openai import OpenAI
+        self._client = OpenAI(
+            api_key=os.getenv("GEMINI_API_KEY"),
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+        self._model = "models/gemini-embedding-001"
+
+    def embed_documents(self, texts):
+        results = []
+        for i in range(0, len(texts), 50):
+            chunk = texts[i : i + 50]
+            resp = self._client.embeddings.create(input=chunk, model=self._model)
+            results.extend([item.embedding for item in resp.data])
+        return results
+
+    def embed_query(self, text):
+        resp = self._client.embeddings.create(input=[text], model=self._model)
+        return resp.data[0].embedding
+
 class LocalDefaultEmbeddings(Embeddings):
     """Fallback embedding model using Chroma's built-in ONNX all-MiniLM-L6-v2 model."""
     def __init__(self):
@@ -34,13 +56,21 @@ class LocalDefaultEmbeddings(Embeddings):
         return list(map(float, self._fn([text])[0]))
 
 def get_embedding_function():
-    """Return OllamaEmbeddings if Ollama server is running, otherwise fall back to local ONNX embeddings."""
+    """Return OllamaEmbeddings if running, otherwise GeminiCloudEmbeddings if API key present, or local ONNX."""
     try:
         import urllib.request
         urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/version", timeout=1)
         return OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
     except Exception:
-        return LocalDefaultEmbeddings()
+        pass
+
+    if os.getenv("GEMINI_API_KEY"):
+        try:
+            return GeminiCloudEmbeddings()
+        except Exception:
+            pass
+
+    return LocalDefaultEmbeddings()
 
 # --- config ---
 CLONE_DIR = Path(os.getenv("CLONE_DIR", "./_cloned_repos"))
