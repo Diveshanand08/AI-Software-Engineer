@@ -94,29 +94,44 @@ class BugResponse(BaseModel):
 # ---- background tasks & status tracking ----
 INDEX_STATUS: dict[str, dict] = {}
 
+def sanitize_collection_name(name: str) -> str:
+    sanitized = re.sub(r"[^a-zA-Z0-9._-]", "_", name.strip())
+    sanitized = re.sub(r"^[^a-zA-Z0-9]+", "", sanitized)
+    sanitized = re.sub(r"[^a-zA-Z0-9]+$", "", sanitized)
+    if len(sanitized) < 3:
+        sanitized = f"repo_{sanitized}"
+    return sanitized
+
 def run_indexing_task(name: str, repo_url: str | None = None, local_path: str | None = None):
+    safe_name = sanitize_collection_name(name)
     try:
-        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Cloning and analyzing {name}..."}
-        print(f"\n[background] Starting index for '{name}'...")
+        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Cloning and analyzing {safe_name}..."}
+        INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        print(f"\n[background] Starting index for '{safe_name}'...")
         if local_path:
             repo_path = Path(local_path).resolve()
         else:
-            repo_path = clone_repo(repo_url, name)
+            repo_path = clone_repo(repo_url, safe_name)
 
-        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Parsing code AST and generating chunks for {name}..."}
+        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Parsing code AST and generating chunks for {safe_name}..."}
+        INDEX_STATUS[safe_name] = INDEX_STATUS[name]
         documents = collect_documents(repo_path)
         if not documents:
             INDEX_STATUS[name] = {"status": "failed", "error": "No indexable code files found (.py, .js, .ts, etc.)."}
-            print(f"[background] Error: No indexable code files found for '{name}'.")
+            INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+            print(f"[background] Error: No indexable code files found for '{safe_name}'.")
             return
 
         INDEX_STATUS[name] = {"status": "in_progress", "message": f"Embedding {len(documents)} code chunks into vector database..."}
-        build_index(documents, collection_name=name)
-        INDEX_STATUS[name] = {"status": "completed", "message": f"Successfully indexed {len(documents)} code chunks for '{name}'!"}
-        print(f"[background] Successfully indexed '{name}'!")
+        INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        build_index(documents, collection_name=safe_name)
+        INDEX_STATUS[name] = {"status": "completed", "message": f"Successfully indexed {len(documents)} code chunks for '{safe_name}'!"}
+        INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        print(f"[background] Successfully indexed '{safe_name}'!")
     except Exception as e:
         INDEX_STATUS[name] = {"status": "failed", "error": str(e)}
-        print(f"[background] Indexing failed for '{name}': {e}")
+        INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        print(f"[background] Indexing failed for '{safe_name}': {e}")
 
 
 # ---- endpoints ----
@@ -206,8 +221,9 @@ def ask_endpoint(req: AskRequest):
         yield f"__SESSION_ID__:{session_id}\n\n"
 
         full_ai_response = ""
+        safe_coll = sanitize_collection_name(req.collection)
         original_stream = ask_stream(
-            req.collection, req.question, model=req.model, k=req.k, provider=req.provider
+            safe_coll, req.question, model=req.model, k=req.k, provider=req.provider
         )
 
         try:
@@ -227,8 +243,9 @@ def ask_endpoint(req: AskRequest):
 
 @app.post("/explain")
 def explain_endpoint(req: ExplainRequest):
+    safe_coll = sanitize_collection_name(req.collection)
     return StreamingResponse(
-        explain_stream(req.collection, req.target, model=req.model, k=req.k, provider=req.provider),
+        explain_stream(safe_coll, req.target, model=req.model, k=req.k, provider=req.provider),
         media_type="text/plain"
     )
 

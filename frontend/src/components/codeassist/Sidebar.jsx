@@ -187,7 +187,7 @@ export function Sidebar({
                 type="text"
                 placeholder="Collection Name (e.g. test_repo)"
                 value={collection}
-                onChange={(e) => onCollectionChange(e.target.value)}
+                onChange={(e) => onCollectionChange(e.target.value.replace(/\s+/g, '_'))}
                 className="w-full rounded-md border border-white/10 bg-[#21262d]/50 px-3 py-1.5 font-mono text-xs text-gray-200 placeholder:text-gray-600 focus:border-blue-500/50 focus:outline-none"
               />
               <button
