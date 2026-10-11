@@ -91,25 +91,31 @@ class BugResponse(BaseModel):
     analysis: str
 
 
-# ---- background tasks ----
+# ---- background tasks & status tracking ----
+INDEX_STATUS: dict[str, dict] = {}
+
 def run_indexing_task(name: str, repo_url: str | None = None, local_path: str | None = None):
     try:
+        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Cloning and analyzing {name}..."}
         print(f"\n[background] Starting index for '{name}'...")
         if local_path:
             repo_path = Path(local_path).resolve()
         else:
             repo_path = clone_repo(repo_url, name)
 
+        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Parsing code AST and generating chunks for {name}..."}
         documents = collect_documents(repo_path)
         if not documents:
+            INDEX_STATUS[name] = {"status": "failed", "error": "No indexable code files found (.py, .js, .ts, etc.)."}
             print(f"[background] Error: No indexable code files found for '{name}'.")
             return
 
+        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Embedding {len(documents)} code chunks into vector database..."}
         build_index(documents, collection_name=name)
+        INDEX_STATUS[name] = {"status": "completed", "message": f"Successfully indexed {len(documents)} code chunks for '{name}'!"}
         print(f"[background] Successfully indexed '{name}'!")
-
-        # Keep cloned repository files available in CLONE_DIR for bug inspection and test generation
     except Exception as e:
+        INDEX_STATUS[name] = {"status": "failed", "error": str(e)}
         print(f"[background] Indexing failed for '{name}': {e}")
 
 
@@ -121,6 +127,21 @@ def root():
 @app.get("/providers")
 def providers():
     return available_providers()
+
+@app.get("/collections")
+def list_collections():
+    """Return all indexed collection names currently stored in ChromaDB."""
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=os.getenv("CHROMA_DIR", "./chroma_db"))
+        return [c.name for c in client.list_collections()]
+    except Exception:
+        return []
+
+@app.get("/index/status/{name}")
+def get_index_status(name: str):
+    """Return the current indexing progress/status for a repository."""
+    return INDEX_STATUS.get(name, {"status": "unknown"})
 
 
 # ── Session endpoints ──────────────────────────────────────────────────────

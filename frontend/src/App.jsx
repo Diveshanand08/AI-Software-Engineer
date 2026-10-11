@@ -147,18 +147,47 @@ function handleProviderChange(p) {
   async function handleImport() {
     if (!repoUrl.trim() || !collection.trim() || isIndexing) return
     setIsIndexing(true)
+    const targetColl = collection.trim()
     try {
       const res = await fetch(`${API_BASE}/index`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: collection, repo_url: repoUrl }),
+        body: JSON.stringify({ name: targetColl, repo_url: repoUrl.trim() }),
       })
-      const data = await res.json()
-      alert(data.message)
-      setRepoUrl('')
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(errText || 'Failed to start indexing')
+      }
+      
+      // Poll indexing status every 2.5s until completed or failed
+      let attempts = 0
+      const pollTimer = setInterval(async () => {
+        attempts++
+        try {
+          const statusRes = await fetch(`${API_BASE}/index/status/${encodeURIComponent(targetColl)}`)
+          if (statusRes.ok) {
+            const data = await statusRes.json()
+            if (data.status === 'completed') {
+              clearInterval(pollTimer)
+              setIsIndexing(false)
+              setRepoUrl('')
+              alert(`🎉 Successfully indexed '${targetColl}'! You can now chat and ask questions about this codebase.`)
+            } else if (data.status === 'failed') {
+              clearInterval(pollTimer)
+              setIsIndexing(false)
+              alert(`❌ Indexing failed for '${targetColl}': ${data.error || 'Unknown error'}`)
+            }
+          }
+        } catch {
+          // ignore transient poll network blips
+        }
+        if (attempts >= 80) { // 200 seconds timeout
+          clearInterval(pollTimer)
+          setIsIndexing(false)
+        }
+      }, 2500)
     } catch (e) {
       alert(`Error starting import: ${e.message}`)
-    } finally {
       setIsIndexing(false)
     }
   }
