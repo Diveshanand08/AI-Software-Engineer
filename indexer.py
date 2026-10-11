@@ -22,7 +22,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
 class GeminiCloudEmbeddings(Embeddings):
-    """Zero-memory cloud embeddings using Gemini's API."""
+    """Zero-memory cloud embeddings using Gemini's API with rate-limit retry."""
     def __init__(self):
         from openai import OpenAI
         self._client = OpenAI(
@@ -32,16 +32,36 @@ class GeminiCloudEmbeddings(Embeddings):
         self._model = "models/gemini-embedding-001"
 
     def embed_documents(self, texts):
+        import time
         results = []
         for i in range(0, len(texts), 50):
             chunk = texts[i : i + 50]
-            resp = self._client.embeddings.create(input=chunk, model=self._model)
-            results.extend([item.embedding for item in resp.data])
+            for attempt in range(5):
+                try:
+                    resp = self._client.embeddings.create(input=chunk, model=self._model)
+                    results.extend([item.embedding for item in resp.data])
+                    time.sleep(0.5)
+                    break
+                except Exception as e:
+                    if "429" in str(e) and attempt < 4:
+                        print(f"[indexer] Rate limit 429 encountered. Backing off for {(attempt + 1) * 6}s...")
+                        time.sleep((attempt + 1) * 6)
+                    else:
+                        raise e
         return results
 
     def embed_query(self, text):
-        resp = self._client.embeddings.create(input=[text], model=self._model)
-        return resp.data[0].embedding
+        import time
+        for attempt in range(5):
+            try:
+                resp = self._client.embeddings.create(input=[text], model=self._model)
+                return resp.data[0].embedding
+            except Exception as e:
+                if "429" in str(e) and attempt < 4:
+                    time.sleep((attempt + 1) * 3)
+                else:
+                    raise e
+        return []
 
 class LocalDefaultEmbeddings(Embeddings):
     """Fallback embedding model using Chroma's built-in ONNX all-MiniLM-L6-v2 model."""
