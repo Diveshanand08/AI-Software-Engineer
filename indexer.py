@@ -133,6 +133,9 @@ def clone_repo(repo_url: str, dest_name: str) -> Path:
     print(f"[indexer] Cloning {repo_url} into {target} ...")
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
+    # Ensure Git allows up to 10 minutes (600s) on slow or large repo connections
+    env["GIT_HTTP_LOW_SPEED_LIMIT"] = "1000"
+    env["GIT_HTTP_LOW_SPEED_TIME"] = "600"
     try:
         git.Repo.clone_from(repo_url, target, depth=1, env=env)
     except Exception as e:

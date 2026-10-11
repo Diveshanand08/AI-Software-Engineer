@@ -227,7 +227,7 @@ function handleProviderChange(p) {
               alert(`❌ Indexing failed for '${targetColl}': ${data.error || 'Unknown error'}`)
             } else if (data.status === 'unknown') {
               unknownAttempts++
-              if (unknownAttempts >= 5) {
+              if (unknownAttempts >= 25) {
                 clearInterval(pollTimerRef.current)
                 setIsIndexing(false)
                 setIndexStatusMsg('')
@@ -238,7 +238,7 @@ function handleProviderChange(p) {
         } catch {
           // ignore transient poll network blips
         }
-        if (attempts >= 80) { // 200 seconds timeout
+        if (attempts >= 300) { // 12.5 minutes (750 seconds) timeout
           clearInterval(pollTimerRef.current)
           setIsIndexing(false)
           setIndexStatusMsg('')
