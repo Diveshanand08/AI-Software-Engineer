@@ -54,6 +54,16 @@ def init_db() -> None:
         if "user_email" not in columns:
             conn.execute("ALTER TABLE sessions ADD COLUMN user_email TEXT DEFAULT ''")
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS index_tasks (
+                name       TEXT PRIMARY KEY,
+                status     TEXT NOT NULL,
+                message    TEXT DEFAULT '',
+                error      TEXT DEFAULT '',
+                updated_at TEXT NOT NULL
+            );
+        """)
+
 
 # ── Sessions ────────────────────────────────────────────────────────────────
 
@@ -138,3 +148,31 @@ def get_messages(session_id: str) -> list[dict]:
             (session_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── Index Task Status ────────────────────────────────────────────────────────
+
+def set_index_status(name: str, status: str, message: str = "", error: str = "") -> None:
+    now = datetime.now().isoformat()
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO index_tasks (name, status, message, error, updated_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(name) DO UPDATE SET
+                   status = excluded.status,
+                   message = excluded.message,
+                   error = excluded.error,
+                   updated_at = excluded.updated_at""",
+            (name, status, message, error, now),
+        )
+
+
+def get_index_status(name: str) -> dict:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT status, message, error, updated_at FROM index_tasks WHERE name = ?",
+            (name,),
+        ).fetchone()
+        if not row:
+            return {"status": "unknown"}
+        return dict(row)

@@ -157,57 +157,97 @@ function handleProviderChange(p) {
     return () => clearInterval(timer)
   }, [loading])
 
+  const [indexStatusMsg, setIndexStatusMsg] = useState('')
+  const pollTimerRef = useRef(null)
+
+  function cancelIndexing() {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+    setIsIndexing(false)
+    setIndexStatusMsg('')
+  }
+
   function appendMessage(m) {
     setMessages((prev) => [...prev, m])
   }
 
   async function handleImport() {
-    if (!repoUrl.trim() || !collection.trim() || isIndexing) return
+    const trimmedUrl = repoUrl.trim()
+    const targetColl = collection.trim().replace(/\s+/g, '_')
+    if (!trimmedUrl || !targetColl || isIndexing) return
+
+    if (trimmedUrl.startsWith('https://github.com/')) {
+      const parts = trimmedUrl.replace('https://github.com/', '').replace(/\.git$/, '').split('/').filter(Boolean)
+      if (parts.length < 2) {
+        alert("⚠️ Please provide a complete GitHub repository URL, for example:\nhttps://github.com/username/repository")
+        return
+      }
+    }
+
     setIsIndexing(true)
-    const targetColl = collection.trim()
+    setIndexStatusMsg('Sending index request to server...')
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+
     try {
       const res = await fetch(`${API_BASE}/index`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: targetColl, repo_url: repoUrl.trim() }),
+        body: JSON.stringify({ name: targetColl, repo_url: trimmedUrl }),
       })
       if (!res.ok) {
         const errText = await res.text()
         throw new Error(errText || 'Failed to start indexing')
       }
       
+      setIndexStatusMsg(`Cloning repository into ${targetColl}...`)
+
       // Poll indexing status every 2.5s until completed or failed
       let attempts = 0
-      const pollTimer = setInterval(async () => {
+      let unknownAttempts = 0
+      pollTimerRef.current = setInterval(async () => {
         attempts++
         try {
           const statusRes = await fetch(`${API_BASE}/index/status/${encodeURIComponent(targetColl)}`)
           if (statusRes.ok) {
             const data = await statusRes.json()
-            if (data.status === 'completed') {
-              clearInterval(pollTimer)
+            if (data.status === 'in_progress') {
+              if (data.message) setIndexStatusMsg(data.message)
+            } else if (data.status === 'completed') {
+              clearInterval(pollTimerRef.current)
               setIsIndexing(false)
+              setIndexStatusMsg('')
               setRepoUrl('')
               setCollection(targetColl)
               fetchCollections()
               alert(`🎉 Successfully indexed '${targetColl}'! You can now chat and ask questions about this codebase.`)
             } else if (data.status === 'failed') {
-              clearInterval(pollTimer)
+              clearInterval(pollTimerRef.current)
               setIsIndexing(false)
+              setIndexStatusMsg('')
               alert(`❌ Indexing failed for '${targetColl}': ${data.error || 'Unknown error'}`)
+            } else if (data.status === 'unknown') {
+              unknownAttempts++
+              if (unknownAttempts >= 5) {
+                clearInterval(pollTimerRef.current)
+                setIsIndexing(false)
+                setIndexStatusMsg('')
+                alert(`⚠️ Indexing process was interrupted or server restarted. Please click Clone & Index again.`)
+              }
             }
           }
         } catch {
           // ignore transient poll network blips
         }
         if (attempts >= 80) { // 200 seconds timeout
-          clearInterval(pollTimer)
+          clearInterval(pollTimerRef.current)
           setIsIndexing(false)
+          setIndexStatusMsg('')
+          alert(`⚠️ Indexing is taking longer than expected. Please check your backend terminal.`)
         }
       }, 2500)
     } catch (e) {
       alert(`Error starting import: ${e.message}`)
       setIsIndexing(false)
+      setIndexStatusMsg('')
     }
   }
 
@@ -372,6 +412,9 @@ function handleProviderChange(p) {
         onRepoUrlChange={setRepoUrl}
         onImport={handleImport}
         isIndexing={isIndexing}
+        indexStatusMsg={indexStatusMsg}
+        onCancelIndex={cancelIndexing}
+        apiBase={API_BASE}
         historyList={historyList}
         activeSessionId={activeSessionId}
         onSelectSession={(id) => {

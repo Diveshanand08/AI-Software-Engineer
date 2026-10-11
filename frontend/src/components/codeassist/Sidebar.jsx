@@ -21,6 +21,9 @@ export function Sidebar({
   onRepoUrlChange, 
   onImport, 
   isIndexing,
+  indexStatusMsg,
+  onCancelIndex,
+  apiBase,
   historyList = [],
   activeSessionId,
   onSelectSession,
@@ -190,20 +193,36 @@ export function Sidebar({
                 onChange={(e) => onCollectionChange(e.target.value.replace(/\s+/g, '_'))}
                 className="w-full rounded-md border border-white/10 bg-[#21262d]/50 px-3 py-1.5 font-mono text-xs text-gray-200 placeholder:text-gray-600 focus:border-blue-500/50 focus:outline-none"
               />
-              <button
-                onClick={onImport}
-                disabled={isIndexing || !repoUrl || !collection}
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600/10 py-1.5 font-mono text-xs font-semibold text-blue-400 transition-colors hover:bg-blue-600/20 disabled:opacity-50"
-              >
-                {isIndexing ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Indexing...
-                  </>
-                ) : (
-                  'Clone & Index'
-                )}
-              </button>
+              {isIndexing ? (
+                <div className="flex flex-col gap-1.5 rounded-md border border-blue-500/20 bg-blue-500/10 p-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-medium text-blue-300">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                      Indexing...
+                    </span>
+                    {onCancelIndex && (
+                      <button
+                        onClick={onCancelIndex}
+                        className="text-[10px] text-gray-400 underline underline-offset-2 hover:text-red-400 cursor-pointer"
+                        title="Click to cancel and reset"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-300 leading-tight">
+                    {indexStatusMsg || 'Cloning and analyzing codebase...'}
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={onImport}
+                  disabled={!repoUrl || !collection}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600/10 py-1.5 font-mono text-xs font-semibold text-blue-400 transition-colors hover:bg-blue-600/20 disabled:opacity-50"
+                >
+                  Clone & Index
+                </button>
+              )}
             </div>
           </div>
 
@@ -217,8 +236,8 @@ export function Sidebar({
                 {status.ok ? 'backend connected' : 'backend offline'}
               </span>
             </div>
-            <div className="mt-1.5 pl-4 font-mono text-[10px] text-gray-600">
-              localhost:8000
+            <div className="mt-1.5 pl-4 font-mono text-[10px] text-gray-600 truncate">
+              {apiBase ? apiBase.replace(/^https?:\/\//, '') : 'localhost:8000'}
             </div>
           </div>
         </div>

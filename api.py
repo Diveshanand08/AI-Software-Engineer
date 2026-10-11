@@ -21,7 +21,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 
-from db import init_db, session_exists, create_session, get_all_sessions, get_messages, append_message, delete_session
+from db import (
+    init_db,
+    session_exists,
+    create_session,
+    get_all_sessions,
+    get_messages,
+    append_message,
+    delete_session,
+    set_index_status,
+    get_index_status as db_get_index_status,
+)
 from indexer import clone_repo, collect_documents, build_index
 from chat import ask as chat_ask, explain as chat_explain
 from llm import available_providers
@@ -105,32 +115,51 @@ def sanitize_collection_name(name: str) -> str:
 def run_indexing_task(name: str, repo_url: str | None = None, local_path: str | None = None):
     safe_name = sanitize_collection_name(name)
     try:
-        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Cloning and analyzing {safe_name}..."}
+        msg = f"Cloning and analyzing {repo_url or safe_name}..."
+        INDEX_STATUS[name] = {"status": "in_progress", "message": msg}
         INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        set_index_status(name, "in_progress", message=msg)
+        set_index_status(safe_name, "in_progress", message=msg)
         print(f"\n[background] Starting index for '{safe_name}'...")
         if local_path:
             repo_path = Path(local_path).resolve()
         else:
             repo_path = clone_repo(repo_url, safe_name)
 
-        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Parsing code AST and generating chunks for {safe_name}..."}
+        msg = f"Parsing code AST and generating chunks for {safe_name}..."
+        INDEX_STATUS[name] = {"status": "in_progress", "message": msg}
         INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        set_index_status(name, "in_progress", message=msg)
+        set_index_status(safe_name, "in_progress", message=msg)
         documents = collect_documents(repo_path)
         if not documents:
-            INDEX_STATUS[name] = {"status": "failed", "error": "No indexable code files found (.py, .js, .ts, etc.)."}
+            err = "No indexable code files found (.py, .js, .ts, etc.)."
+            INDEX_STATUS[name] = {"status": "failed", "error": err}
             INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+            set_index_status(name, "failed", error=err)
+            set_index_status(safe_name, "failed", error=err)
             print(f"[background] Error: No indexable code files found for '{safe_name}'.")
             return
 
-        INDEX_STATUS[name] = {"status": "in_progress", "message": f"Embedding {len(documents)} code chunks into vector database..."}
+        msg = f"Embedding {len(documents)} code chunks into vector database..."
+        INDEX_STATUS[name] = {"status": "in_progress", "message": msg}
         INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        set_index_status(name, "in_progress", message=msg)
+        set_index_status(safe_name, "in_progress", message=msg)
         build_index(documents, collection_name=safe_name)
-        INDEX_STATUS[name] = {"status": "completed", "message": f"Successfully indexed {len(documents)} code chunks for '{safe_name}'!"}
+
+        success_msg = f"Successfully indexed {len(documents)} code chunks for '{safe_name}'!"
+        INDEX_STATUS[name] = {"status": "completed", "message": success_msg}
         INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        set_index_status(name, "completed", message=success_msg)
+        set_index_status(safe_name, "completed", message=success_msg)
         print(f"[background] Successfully indexed '{safe_name}'!")
     except Exception as e:
-        INDEX_STATUS[name] = {"status": "failed", "error": str(e)}
+        err_msg = str(e)
+        INDEX_STATUS[name] = {"status": "failed", "error": err_msg}
         INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+        set_index_status(name, "failed", error=err_msg)
+        set_index_status(safe_name, "failed", error=err_msg)
         print(f"[background] Indexing failed for '{safe_name}': {e}")
 
 
@@ -154,8 +183,11 @@ def list_collections():
         return []
 
 @app.get("/index/status/{name}")
-def get_index_status(name: str):
+def get_index_status_endpoint(name: str):
     """Return the current indexing progress/status for a repository."""
+    db_status = db_get_index_status(name)
+    if db_status.get("status") != "unknown":
+        return db_status
     return INDEX_STATUS.get(name, {"status": "unknown"})
 
 
