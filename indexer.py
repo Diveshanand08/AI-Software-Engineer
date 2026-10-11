@@ -50,7 +50,12 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 # file extensions worth indexing
 CODE_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs", ".cpp", ".c", ".h"}
-IGNORE_DIRS = {".git", "node_modules", "venv", "__pycache__", ".venv", "dist", "build", "_cloned_repos", "chroma_db"}
+IGNORE_DIRS = {
+    ".git", "node_modules", "venv", "__pycache__", ".venv", "dist", "build",
+    "_cloned_repos", "chroma_db", ".next", "out", ".output", ".cache",
+    "coverage", ".turbo", ".nuxt", ".svelte-kit", ".docusaurus", "vendor",
+    ".yarn", ".pnpm-store", ".idea", ".vscode"
+}
 
 
 def clone_repo(repo_url: str, dest_name: str) -> Path:
@@ -143,8 +148,8 @@ def chunk_file_whole(filepath: Path, repo_root: Path, max_chars: int = 3000) -> 
     return chunks
 
 
-def collect_documents(repo_path: Path) -> list[Document]:
-    """Walk repo, chunk all code files."""
+def collect_documents(repo_path: Path, max_chunks: int = 800) -> list[Document]:
+    """Walk repo, chunk all code files while skipping minified/compiled files."""
     all_chunks = []
     file_count = 0
 
@@ -154,32 +159,50 @@ def collect_documents(repo_path: Path) -> list[Document]:
             fpath = Path(root) / fname
             if fpath.suffix not in CODE_EXTENSIONS:
                 continue
+            lower_name = fname.lower()
+            if lower_name.endswith(".min.js") or lower_name.endswith(".bundle.js") or lower_name.endswith(".d.ts") or lower_name.endswith(".min.css"):
+                continue
+
             file_count += 1
             if fpath.suffix == ".py":
                 all_chunks.extend(chunk_python_file(fpath, repo_path))
             else:
                 all_chunks.extend(chunk_file_whole(fpath, repo_path))
 
+            if len(all_chunks) >= max_chunks:
+                print(f"[indexer] Reached chunk limit ({max_chunks}). Capping collection for cloud performance.")
+                all_chunks = all_chunks[:max_chunks]
+                break
+        if len(all_chunks) >= max_chunks:
+            break
+
     print(f"[indexer] Scanned {file_count} code files, produced {len(all_chunks)} chunks.")
     return all_chunks
 
 
-def build_index(documents: list[Document], collection_name: str, batch_size: int = 50):
-    """Embed documents and persist into Chroma, in batches to avoid overwhelming Ollama."""
+def build_index(documents: list[Document], collection_name: str, batch_size: int = 50, progress_callback=None):
+    """Embed documents and persist into Chroma, reporting progress via callback."""
     if not documents:
         print("[indexer] No documents to index. Aborting.")
         return
 
     embeddings = get_embedding_function()
-
-    print(f"[indexer] Embedding {len(documents)} chunks with '{EMBED_MODEL}' in batches of {batch_size} ...")
+    total = len(documents)
+    print(f"[indexer] Embedding {total} chunks with '{EMBED_MODEL}' in batches of {batch_size} ...")
 
     vectordb = None
-    total = len(documents)
     for i in range(0, total, batch_size):
         batch = documents[i : i + batch_size]
-        print(f"[indexer]   batch {i // batch_size + 1}/{(total - 1) // batch_size + 1} "
-              f"({i + len(batch)}/{total} chunks)")
+        current_count = min(i + len(batch), total)
+        percent = int(current_count / total * 100)
+        msg = f"Embedding chunks: {current_count}/{total} ({percent}%)..."
+        print(f"[indexer]   {msg}")
+        if progress_callback:
+            try:
+                progress_callback(msg)
+            except Exception:
+                pass
+
         if vectordb is None:
             vectordb = Chroma.from_documents(
                 documents=batch,

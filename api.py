@@ -141,12 +141,18 @@ def run_indexing_task(name: str, repo_url: str | None = None, local_path: str | 
             print(f"[background] Error: No indexable code files found for '{safe_name}'.")
             return
 
+        def on_progress(p_msg):
+            INDEX_STATUS[name] = {"status": "in_progress", "message": p_msg}
+            INDEX_STATUS[safe_name] = INDEX_STATUS[name]
+            try:
+                set_index_status(name, "in_progress", message=p_msg)
+                set_index_status(safe_name, "in_progress", message=p_msg)
+            except Exception:
+                pass
+
         msg = f"Embedding {len(documents)} code chunks into vector database..."
-        INDEX_STATUS[name] = {"status": "in_progress", "message": msg}
-        INDEX_STATUS[safe_name] = INDEX_STATUS[name]
-        set_index_status(name, "in_progress", message=msg)
-        set_index_status(safe_name, "in_progress", message=msg)
-        build_index(documents, collection_name=safe_name)
+        on_progress(msg)
+        build_index(documents, collection_name=safe_name, progress_callback=on_progress)
 
         success_msg = f"Successfully indexed {len(documents)} code chunks for '{safe_name}'!"
         INDEX_STATUS[name] = {"status": "completed", "message": success_msg}
