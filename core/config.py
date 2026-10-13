@@ -48,7 +48,7 @@ class Settings:
     GIT_LOW_SPEED_TIME: str = "600"
 
     # Indexer limits
-    MAX_CHUNKS_PER_REPO: int = int(os.getenv("MAX_CHUNKS_PER_REPO", "800"))
+    MAX_CHUNKS_PER_REPO: int = int(os.getenv("MAX_CHUNKS_PER_REPO", "100"))
     DEFAULT_RETRIEVAL_K: int = int(os.getenv("DEFAULT_RETRIEVAL_K", "6"))
 
 

@@ -21,13 +21,15 @@ from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from core.config import settings
 
 class GeminiCloudEmbeddings(Embeddings):
     """Zero-memory cloud embeddings using Gemini's API with rate-limit retry."""
     def __init__(self):
         from openai import OpenAI
+        api_key = os.getenv("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", None)
         self._client = OpenAI(
-            api_key=os.getenv("GEMINI_API_KEY"),
+            api_key=api_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         )
         self._model = "models/gemini-embedding-001"
@@ -41,12 +43,12 @@ class GeminiCloudEmbeddings(Embeddings):
                 try:
                     resp = self._client.embeddings.create(input=chunk, model=self._model)
                     results.extend([item.embedding for item in resp.data])
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                     break
                 except Exception as e:
                     if "429" in str(e) and attempt < 4:
-                        print(f"[indexer] Rate limit 429 encountered. Backing off for {(attempt + 1) * 6}s...")
-                        time.sleep((attempt + 1) * 6)
+                        print(f"[indexer] Rate limit 429 encountered. Backing off for {(attempt + 1) * 4}s...")
+                        time.sleep((attempt + 1) * 4)
                     else:
                         raise e
         return results
@@ -81,7 +83,14 @@ class LocalDefaultEmbeddings(Embeddings):
         return list(map(float, self._fn([text])[0]))
 
 def get_embedding_function():
-    """Return OllamaEmbeddings if running locally, otherwise LocalDefaultEmbeddings (zero API quota/rate limits)."""
+    """Return GeminiCloudEmbeddings if GEMINI_API_KEY is configured, else Ollama, else LocalDefaultEmbeddings."""
+    gemini_key = os.getenv("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", None)
+    if gemini_key and gemini_key.strip():
+        try:
+            return GeminiCloudEmbeddings()
+        except Exception as e:
+            print(f"[indexer] Failed to initialize GeminiCloudEmbeddings ({e}), falling back...")
+
     try:
         import urllib.request
         urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/version", timeout=1)
@@ -90,8 +99,6 @@ def get_embedding_function():
         pass
 
     return LocalDefaultEmbeddings()
-
-from core.config import settings
 
 # --- config ---
 CLONE_DIR = settings.CLONE_DIR
@@ -114,7 +121,8 @@ IGNORE_DIRS = {
     ".git", "node_modules", "venv", "__pycache__", ".venv", "dist", "build",
     "_cloned_repos", "chroma_db", ".next", "out", ".output", ".cache",
     "coverage", ".turbo", ".nuxt", ".svelte-kit", ".docusaurus", "vendor",
-    ".yarn", ".pnpm-store", ".idea", ".vscode"
+    ".yarn", ".pnpm-store", ".idea", ".vscode", "docs", "site", ".github",
+    "translations", "locales"
 }
 
 
@@ -235,7 +243,7 @@ def chunk_file_whole(filepath: Path, repo_root: Path, max_chars: int = 3000) -> 
     return chunks
 
 
-def collect_documents(repo_path: Path, max_chunks: int = 800) -> list[Document]:
+def collect_documents(repo_path: Path, max_chunks: int = 100) -> list[Document]:
     """Walk repo, chunk all code files while skipping minified/compiled files."""
     all_chunks = []
     file_count = 0
@@ -268,7 +276,7 @@ def collect_documents(repo_path: Path, max_chunks: int = 800) -> list[Document]:
     return all_chunks
 
 
-def build_index(documents: list[Document], collection_name: str, batch_size: int = 20, progress_callback=None):
+def build_index(documents: list[Document], collection_name: str, batch_size: int = 50, progress_callback=None):
     """Embed documents and persist into Chroma, reporting progress via callback."""
     if not documents:
         print("[indexer] No documents to index. Aborting.")
@@ -276,7 +284,18 @@ def build_index(documents: list[Document], collection_name: str, batch_size: int
 
     embeddings = get_embedding_function()
     total = len(documents)
-    print(f"[indexer] Embedding {total} chunks in batches of {batch_size} ...")
+    print(f"[indexer] Embedding {total} chunks using {embeddings.__class__.__name__} in batches of {batch_size} ...")
+
+    # Clean previous collection if it exists to prevent dimension mismatches or corrupted partial state
+    try:
+        import chromadb
+        chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        existing_colls = [c.name for c in chroma_client.list_collections()]
+        if collection_name in existing_colls:
+            chroma_client.delete_collection(name=collection_name)
+            print(f"[indexer] Cleared existing collection '{collection_name}' for clean indexing.")
+    except Exception as e:
+        print(f"[indexer] Note: could not pre-clean collection '{collection_name}': {e}")
 
     vectordb = None
     for i in range(0, total, batch_size):

@@ -61,15 +61,25 @@ export function useIndexing() {
       await api.startIndex(targetColl, trimmedUrl)
       setIndexStatusMsg(`Cloning repository into ${targetColl}...`)
 
-      let attempts = 0
+      let stalledAttempts = 0
+      let lastMsg = ''
       let unknownAttempts = 0
 
       pollTimerRef.current = setInterval(async () => {
-        attempts++
         try {
           const data = await api.getIndexStatus(targetColl)
           if (data.status === 'in_progress') {
-            if (data.message) setIndexStatusMsg(data.message)
+            if (data.message) {
+              setIndexStatusMsg(data.message)
+              if (data.message !== lastMsg) {
+                lastMsg = data.message
+                stalledAttempts = 0
+              } else {
+                stalledAttempts++
+              }
+            } else {
+              stalledAttempts++
+            }
           } else if (data.status === 'completed') {
             clearInterval(pollTimerRef.current)
             setIsIndexing(false)
@@ -78,29 +88,33 @@ export function useIndexing() {
             setCollection(targetColl)
             fetchCollections()
             alert(`🎉 Successfully indexed '${targetColl}'! You can now ask questions about this codebase.`)
+            return
           } else if (data.status === 'failed') {
             clearInterval(pollTimerRef.current)
             setIsIndexing(false)
             setIndexStatusMsg('')
             alert(`❌ Indexing failed for '${targetColl}': ${data.error || 'Unknown error'}`)
+            return
           } else if (data.status === 'unknown') {
             unknownAttempts++
-            if (unknownAttempts >= 25) {
+            if (unknownAttempts >= 30) {
               clearInterval(pollTimerRef.current)
               setIsIndexing(false)
               setIndexStatusMsg('')
               alert(`⚠️ Indexing process was interrupted or server restarted. Please try again.`)
+              return
             }
           }
         } catch {
           // ignore transient poll network blips
         }
 
-        if (attempts >= 300) {
+        // Only time out if there has been no progress update for 5 minutes
+        if (stalledAttempts >= 120) {
           clearInterval(pollTimerRef.current)
           setIsIndexing(false)
           setIndexStatusMsg('')
-          alert(`⚠️ Indexing is taking longer than expected. Please check your backend terminal.`)
+          alert(`⚠️ Indexing appears stalled. Please check your backend terminal.`)
         }
       }, 2500)
     } catch (e) {
