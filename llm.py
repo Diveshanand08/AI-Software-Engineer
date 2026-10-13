@@ -73,6 +73,11 @@ def generate(messages: list[dict], provider: str = "ollama", ollama_model: str |
             )
             return res["message"]["content"]
         except Exception as e:
+            import os
+            gemini_key = os.getenv("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", None)
+            if gemini_key:
+                print(f"[llm] Ollama connection unavailable ({e}), automatically falling back to Gemini...")
+                return generate(messages, provider="gemini")
             raise ProviderUnavailableError("ollama", str(e))
 
     client = _hosted_client(cfg)
@@ -108,6 +113,13 @@ def generate_stream(messages: list[dict], provider: str = "ollama", ollama_model
                 yield part["message"]["content"]
             return
         except Exception as e:
+            import os
+            gemini_key = os.getenv("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", None)
+            if gemini_key:
+                print(f"[llm] Ollama stream unavailable ({e}), automatically falling back to Gemini...")
+                for part in generate_stream(messages, provider="gemini"):
+                    yield part
+                return
             raise ProviderUnavailableError("ollama", str(e))
 
     client = _hosted_client(cfg)
