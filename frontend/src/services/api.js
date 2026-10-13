@@ -64,11 +64,11 @@ export const api = {
     return res.json()
   },
 
-  async findBugs(filePath) {
+  async findBugs(filePath, collection = '', provider = 'ollama') {
     const res = await fetch(`${API_BASE}/bugs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_path: filePath }),
+      body: JSON.stringify({ file_path: filePath, collection, provider }),
     })
     if (!res.ok) {
       const err = await res.text()

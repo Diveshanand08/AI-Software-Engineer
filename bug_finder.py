@@ -76,16 +76,26 @@ def format_pylint_findings(findings: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def analyze_file(filepath: str, model: str = "phi3") -> str:
-    path = Path(filepath)
-    if not path.exists():
-        return f"File not found: {filepath}"
+def analyze_code_content(source: str, filename: str = "code.py", model: str = "phi3", provider: str = "ollama") -> str:
+    """Analyze in-memory source code with static analysis and LLM."""
+    import tempfile
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as tmp:
+            tmp.write(source)
+            tmp_path = tmp.name
+        findings = run_pylint(tmp_path)
+    except Exception:
+        findings = []
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
-    source = path.read_text(encoding="utf-8", errors="ignore")
-    findings = run_pylint(str(path))
     findings_text = format_pylint_findings(findings)
-
-    user_prompt = f"""Source code ({path.name}):
+    user_prompt = f"""Source code ({filename}):
 ```python
 {source}
 ```
@@ -95,13 +105,30 @@ Pylint findings:
 
 Analyze this and respond in the required two-section format."""
 
-    llm = ChatOllama(model=model, base_url=OLLAMA_BASE_URL, temperature=0.1)
     messages = [
-        SystemMessage(content=BUG_SYSTEM_PROMPT),
-        HumanMessage(content=user_prompt),
+        {"role": "system", "content": BUG_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
     ]
-    response = llm.invoke(messages)
-    return response.content
+
+    from llm import generate
+    try:
+        return generate(messages, provider=provider, ollama_model=model)
+    except Exception as e:
+        if provider != "gemini" and os.getenv("GEMINI_API_KEY"):
+            try:
+                return generate(messages, provider="gemini")
+            except Exception:
+                pass
+        return f"Bug analysis error: {e}"
+
+
+def analyze_file(filepath: str, model: str = "phi3", provider: str = "ollama") -> str:
+    path = Path(filepath)
+    if not path.exists():
+        return f"File not found: {filepath}"
+
+    source = path.read_text(encoding="utf-8", errors="ignore")
+    return analyze_code_content(source, filename=path.name, model=model, provider=provider)
 
 
 def main():

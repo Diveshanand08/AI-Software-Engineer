@@ -32,6 +32,8 @@ class AnswerResponse(BaseModel):
 class BugRequest(BaseModel):
     file_path: str
     model: str = "phi3"
+    collection: str | None = None
+    provider: str = "ollama"
 
 
 class BugResponse(BaseModel):

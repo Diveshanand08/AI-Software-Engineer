@@ -29,11 +29,60 @@ router = APIRouter(prefix="", tags=["Code Operations"])
 @router.post("/bugs", response_model=BugResponse)
 def bugs_endpoint(req: BugRequest):
     """Run AST and static code analysis to detect potential bugs and security vulnerabilities."""
-    path = Path(req.file_path)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
-    result = analyze_file(str(path), model=req.model)
-    return BugResponse(analysis=result)
+    from core.config import settings
+    from routers.indexing import sanitize_collection_name
+
+    target_path = req.file_path.strip().strip("'\"")
+    candidate = Path(target_path)
+
+    # 1. Check if direct path exists
+    if not candidate.exists():
+        # 2. Check if inside specified collection under CLONE_DIR
+        if req.collection:
+            colls_to_try = [req.collection, sanitize_collection_name(req.collection)]
+            for col in colls_to_try:
+                coll_candidate = settings.CLONE_DIR / col / target_path
+                if coll_candidate.exists():
+                    candidate = coll_candidate
+                    break
+
+        # 3. Search all repos under CLONE_DIR
+        if not candidate.exists() and settings.CLONE_DIR.exists():
+            for repo_dir in settings.CLONE_DIR.iterdir():
+                if repo_dir.is_dir():
+                    possible = repo_dir / target_path
+                    if possible.exists():
+                        candidate = possible
+                        break
+                    matches = list(repo_dir.rglob(Path(target_path).name))
+                    if matches:
+                        candidate = matches[0]
+                        break
+
+    if candidate.exists():
+        result = analyze_file(str(candidate), model=req.model, provider=req.provider)
+        return BugResponse(analysis=result)
+
+    # 4. If not found on local disk, try fetching chunks from ChromaDB for this collection
+    if req.collection:
+        try:
+            from retriever import retrieve
+            safe_coll = sanitize_collection_name(req.collection)
+            chunks = retrieve(safe_coll, f"file: {target_path}", k=10)
+            file_chunks = [c for c in chunks if c.get("file") and (target_path in c["file"] or c["file"] in target_path)]
+            if file_chunks:
+                file_chunks.sort(key=lambda x: x.get("start_line") or 0)
+                combined_code = "\n\n".join([c["content"] for c in file_chunks])
+                from bug_finder import analyze_code_content
+                result = analyze_code_content(combined_code, filename=Path(target_path).name, model=req.model, provider=req.provider)
+                return BugResponse(analysis=result)
+        except Exception:
+            pass
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"File not found: '{req.file_path}'. Ensure the path is correct or part of the indexed repo.",
+    )
 
 
 @router.post("/agent", response_model=AgentResponse)

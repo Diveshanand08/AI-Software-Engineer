@@ -22,7 +22,7 @@ PROVIDERS = {
     },
     "gemini": {
         "label": "Google Gemini Flash",
-        "model": "gemini-3.8-flash",
+        "model": "models/gemini-3.8-flash",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "key": lambda: settings.GEMINI_API_KEY,
         "key_name": "GEMINI_API_KEY",
@@ -76,13 +76,18 @@ def generate(messages: list[dict], provider: str = "ollama", ollama_model: str |
             raise ProviderUnavailableError("ollama", str(e))
 
     client = _hosted_client(cfg)
-    try:
-        res = client.chat.completions.create(
-            model=cfg["model"], messages=messages, max_tokens=1200, temperature=0.2
-        )
-        return res.choices[0].message.content or ""
-    except Exception as e:
-        raise ProviderUnavailableError(provider, str(e))
+    import time
+    for attempt in range(3):
+        try:
+            res = client.chat.completions.create(
+                model=cfg["model"], messages=messages, max_tokens=1200, temperature=0.2
+            )
+            return res.choices[0].message.content or ""
+        except Exception as e:
+            if ("503" in str(e) or "429" in str(e)) and attempt < 2:
+                time.sleep((attempt + 1) * 2)
+                continue
+            raise ProviderUnavailableError(provider, str(e))
 
 
 def generate_stream(messages: list[dict], provider: str = "ollama", ollama_model: str | None = None):

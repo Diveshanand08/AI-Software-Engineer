@@ -85,7 +85,7 @@ export default function App() {
 
     try {
       if (mode === 'bugs') {
-        const data = await api.findBugs(trimmed)
+        const data = await api.findBugs(trimmed, collection, provider)
         appendMessage({
           id: crypto.randomUUID(),
           role: 'assistant',
