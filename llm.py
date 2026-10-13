@@ -22,7 +22,7 @@ PROVIDERS = {
     },
     "gemini": {
         "label": "Google Gemini Flash",
-        "model": "models/gemini-3.8-flash",
+        "model": "models/gemini-flash-lite-latest",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "key": lambda: settings.GEMINI_API_KEY,
         "key_name": "GEMINI_API_KEY",

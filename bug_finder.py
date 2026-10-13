@@ -45,7 +45,7 @@ def run_pylint(filepath: str) -> list[dict]:
             [sys.executable, "-m", "pylint", filepath, "--output-format=json", "--disable=C0114,C0115,C0116"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=8,
         )
     except FileNotFoundError:
         print("[bug_finder] pylint not installed. Run: pip install pylint")
