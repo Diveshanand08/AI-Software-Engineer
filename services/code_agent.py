@@ -39,23 +39,29 @@ class CodeAgentState(TypedDict):
     attempts: int
     max_attempts: int
     model: str
+    provider: Optional[str]
     success: bool
     history: list[str]
 
 
 def _extract_code(text: str) -> str:
-    """Pull code out of a ```python ... ``` block, or return the raw text if no block found."""
-    match = re.search(r"```python\s*(.*?)```", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    match = re.search(r"```\s*(.*?)```", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return text.strip()
+    match = re.search(r"```(?:python)?\s*\n?(.*?)(?:```|$)", text, re.DOTALL)
+    if match and match.group(1).strip():
+        code = match.group(1).strip()
+    else:
+        code = text.strip()
+
+    lines = code.splitlines()
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
 
 
 def generate_code_node(state: CodeAgentState) -> CodeAgentState:
-    llm = ChatOllama(model=state["model"], base_url=settings.OLLAMA_BASE_URL, temperature=0.2)
+    from llm import generate
+    provider = state.get("provider") or ("gemini" if settings.GEMINI_API_KEY else "ollama")
 
     if state.get("error"):
         user_prompt = f"""Task: {state['task']}
@@ -73,12 +79,18 @@ Fix the code to resolve this error. Output the full corrected script."""
         user_prompt = f"Task: {state['task']}"
 
     messages = [
-        SystemMessage(content=GENERATE_SYSTEM_PROMPT),
-        HumanMessage(content=user_prompt),
+        {"role": "system", "content": GENERATE_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
     ]
-    response = llm.invoke(messages)
-    code = _extract_code(response.content)
+    try:
+        raw_res = generate(messages, provider=provider, ollama_model=state.get("model", "phi3"))
+    except Exception as e:
+        if provider != "gemini" and settings.GEMINI_API_KEY:
+            raw_res = generate(messages, provider="gemini")
+        else:
+            raise e
 
+    code = _extract_code(raw_res)
     state["code"] = code
     state["attempts"] += 1
     state["history"].append(f"--- Attempt {state['attempts']} ---\n{code}")
@@ -138,7 +150,7 @@ def build_graph():
     return graph.compile()
 
 
-def run_agent(task: str, model: str = "phi3", max_attempts: int = 3) -> CodeAgentState:
+def run_agent(task: str, model: str = "phi3", max_attempts: int = 3, provider: str = "gemini") -> CodeAgentState:
     """Execute the multi-attempt code generation and sandbox testing workflow."""
     app = build_graph()
     initial_state: CodeAgentState = {
@@ -150,6 +162,7 @@ def run_agent(task: str, model: str = "phi3", max_attempts: int = 3) -> CodeAgen
         "attempts": 0,
         "max_attempts": max_attempts,
         "model": model,
+        "provider": provider,
         "success": False,
         "history": [],
     }

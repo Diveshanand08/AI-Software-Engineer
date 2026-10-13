@@ -46,6 +46,7 @@ class AgentRequest(BaseModel):
     max_attempts: int = 3
     session_id: str | None = None
     user_email: str | None = None
+    provider: str = "gemini"
 
 
 class AgentResponse(BaseModel):
@@ -65,6 +66,7 @@ class TestGenRequest(BaseModel):
     max_attempts: int = 3
     session_id: str | None = None
     user_email: str | None = None
+    provider: str = "gemini"
 
 
 class TestGenResponse(BaseModel):

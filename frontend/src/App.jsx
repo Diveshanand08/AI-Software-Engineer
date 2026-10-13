@@ -92,7 +92,7 @@ export default function App() {
           content: data.analysis || 'No bugs detected or no response.',
         })
       } else if (mode === 'agent') {
-        const data = await api.runAgent(trimmed, activeSessionId, user?.email || '')
+        const data = await api.runAgent(trimmed, activeSessionId, user?.email || '', provider)
         if (data.session_id) {
           setActiveSessionId(data.session_id)
           fetchHistory()
@@ -100,12 +100,12 @@ export default function App() {
         const statusBadge = data.success
           ? `✅ **Auto-Coder Solved Task!** (in ${data.attempts} attempt${data.attempts > 1 ? 's' : ''})`
           : `❌ **Auto-Coder Failed** (${data.attempts} attempts reached)`
-        const content = `${statusBadge}\n\n\`\`\`python\n${data.code}\n\`\`\`\n\n**Docker Sandbox Execution Output:**\n\`\`\`\n${
+        const content = `${statusBadge}\n\n\`\`\`python\n${data.code}\n\`\`\`\n\n**Sandbox Execution Output:**\n\`\`\`\n${
           data.stdout || data.stderr || data.error || 'No output.'
         }\n\`\`\``
         appendMessage({ id: crypto.randomUUID(), role: 'assistant', content })
       } else if (mode === 'tests') {
-        const data = await api.generateTests(collection, trimmed, activeSessionId, user?.email || '')
+        const data = await api.generateTests(collection, trimmed, activeSessionId, user?.email || '', provider)
         if (data.session_id) {
           setActiveSessionId(data.session_id)
           fetchHistory()

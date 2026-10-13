@@ -53,21 +53,28 @@ class TestGenState(TypedDict):
     attempts: int
     max_attempts: int
     model: str
+    provider: Optional[str]
     success: bool
 
 
 def _extract_code(text: str) -> str:
-    match = re.search(r"```python\s*(.*?)```", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    match = re.search(r"```\s*(.*?)```", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return text.strip()
+    match = re.search(r"```(?:python)?\s*\n?(.*?)(?:```|$)", text, re.DOTALL)
+    if match and match.group(1).strip():
+        code = match.group(1).strip()
+    else:
+        code = text.strip()
+
+    lines = code.splitlines()
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
 
 
 def generate_tests_node(state: TestGenState) -> TestGenState:
-    llm = ChatOllama(model=state["model"], base_url=OLLAMA_BASE_URL, temperature=0.2)
+    from llm import generate
+    provider = state.get("provider") or ("gemini" if os.getenv("GEMINI_API_KEY") else "ollama")
 
     if state.get("error"):
         user_prompt = f"""Target: {state['target']}
@@ -93,12 +100,18 @@ Code context from the repository:
 Write a self-contained pytest-style test script for this target."""
 
     messages = [
-        SystemMessage(content=TEST_GEN_SYSTEM_PROMPT),
-        HumanMessage(content=user_prompt),
+        {"role": "system", "content": TEST_GEN_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
     ]
-    response = llm.invoke(messages)
-    code = _extract_code(response.content)
+    try:
+        raw_res = generate(messages, provider=provider, ollama_model=state.get("model", "phi3"))
+    except Exception as e:
+        if provider != "gemini" and os.getenv("GEMINI_API_KEY"):
+            raw_res = generate(messages, provider="gemini")
+        else:
+            raise e
 
+    code = _extract_code(raw_res)
     state["code"] = code
     state["attempts"] += 1
     return state
@@ -153,7 +166,7 @@ def build_graph():
     return graph.compile()
 
 
-def generate_tests_for_target(collection_name: str, target: str, model: str = "phi3", max_attempts: int = 3, k: int = 4) -> TestGenState:
+def generate_tests_for_target(collection_name: str, target: str, model: str = "phi3", max_attempts: int = 3, k: int = 4, provider: str = "gemini") -> TestGenState:
     results = retrieve(collection_name, target, k=k)
     if not results:
         raise ValueError(f"No context found for '{target}' in collection '{collection_name}'")
@@ -171,6 +184,7 @@ def generate_tests_for_target(collection_name: str, target: str, model: str = "p
         "attempts": 0,
         "max_attempts": max_attempts,
         "model": model,
+        "provider": provider,
         "success": False,
     }
     return app.invoke(initial_state)

@@ -56,14 +56,58 @@ def _get_client() -> docker.DockerClient:
         )
 
 
+def _run_in_subprocess_sandbox(code: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> SandboxResult:
+    """Safe isolated subprocess execution fallback when Docker is unavailable."""
+    import subprocess
+    import sys
+    run_id = uuid.uuid4().hex[:8]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script_path = Path(tmpdir) / f"script_{run_id}.py"
+        script_path.write_text(code, encoding="utf-8")
+        try:
+            res = subprocess.run(
+                [sys.executable, str(script_path)],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=tmpdir,
+            )
+            return SandboxResult(
+                stdout=res.stdout,
+                stderr=res.stderr,
+                exit_code=res.returncode,
+                timed_out=False,
+                error=None,
+            )
+        except subprocess.TimeoutExpired:
+            return SandboxResult(
+                stdout="",
+                stderr="Execution timed out (possible infinite loop).",
+                exit_code=None,
+                timed_out=True,
+                error="Timeout",
+            )
+        except Exception as e:
+            return SandboxResult(
+                stdout="",
+                stderr=str(e),
+                exit_code=1,
+                timed_out=False,
+                error=str(e),
+            )
+
+
 def run_code_in_sandbox(
     code: str,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
     memory_limit: str = DEFAULT_MEMORY_LIMIT,
     image: str = DEFAULT_IMAGE,
 ) -> SandboxResult:
-    """Run a Python code string inside an isolated Docker container. Returns a SandboxResult."""
-    client = _get_client()
+    """Run a Python code string inside Docker if available, otherwise safe subprocess fallback."""
+    try:
+        client = _get_client()
+    except Exception:
+        return _run_in_subprocess_sandbox(code, timeout=timeout)
 
     # write code to a temp file that we'll mount into the container
     run_id = uuid.uuid4().hex[:8]

@@ -77,7 +77,7 @@ export const api = {
     return res.json()
   },
 
-  async runAgent(task, sessionId = null, userEmail = '') {
+  async runAgent(task, sessionId = null, userEmail = '', provider = 'gemini') {
     const res = await fetch(`${API_BASE}/agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -86,6 +86,7 @@ export const api = {
         session_id: sessionId,
         user_email: userEmail,
         model: 'phi3',
+        provider,
       }),
     })
     if (!res.ok) {
@@ -95,7 +96,7 @@ export const api = {
     return res.json()
   },
 
-  async generateTests(collection, target, sessionId = null, userEmail = '') {
+  async generateTests(collection, target, sessionId = null, userEmail = '', provider = 'gemini') {
     const res = await fetch(`${API_BASE}/tests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -105,6 +106,7 @@ export const api = {
         session_id: sessionId,
         user_email: userEmail,
         model: 'phi3',
+        provider,
       }),
     })
     if (!res.ok) {

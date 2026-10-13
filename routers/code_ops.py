@@ -97,7 +97,7 @@ def agent_endpoint(req: AgentRequest):
     append_message(session_id, "user", f"[Auto-Coder Task] {req.task}")
 
     try:
-        result = run_agent(req.task, model=req.model, max_attempts=req.max_attempts)
+        result = run_agent(req.task, model=req.model, max_attempts=req.max_attempts, provider=req.provider)
 
         status_line = (
             f"✅ **Success!** (after {result['attempts']} attempt{'s' if result['attempts'] > 1 else ''})"
@@ -138,7 +138,7 @@ def tests_endpoint(req: TestGenRequest):
 
     try:
         result = generate_tests_for_target(
-            req.collection, req.target, model=req.model, max_attempts=req.max_attempts
+            req.collection, req.target, model=req.model, max_attempts=req.max_attempts, provider=req.provider
         )
         status_line = (
             f"✅ **Tests Passed in Docker!** ({result['attempts']} attempt{'s' if result['attempts'] > 1 else ''})"

@@ -22,9 +22,33 @@ EMBED_MODEL = settings.EMBED_MODEL
 OLLAMA_BASE_URL = settings.OLLAMA_BASE_URL
 
 
+def get_embeddings_for_collection(collection_name: str):
+    """Dynamically match embedding function to collection's existing dimension to prevent InvalidArgumentError."""
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        c = client.get_collection(collection_name)
+        sample = c.get(limit=1, include=["embeddings"])
+        embs = sample.get("embeddings")
+        if embs is not None and len(embs) > 0 and len(embs[0]) > 0:
+            dim = len(embs[0])
+            if dim == 768:
+                from langchain_ollama import OllamaEmbeddings
+                return OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
+            elif dim == 384:
+                from indexer import LocalDefaultEmbeddings
+                return LocalDefaultEmbeddings()
+            elif dim == 3072:
+                from indexer import GeminiCloudEmbeddings
+                return GeminiCloudEmbeddings()
+    except Exception:
+        pass
+    return get_embedding_function()
+
+
 def load_retriever(collection_name: str, k: int = 4):
     """Load the persisted Chroma collection and return a retriever object."""
-    embeddings = get_embedding_function()
+    embeddings = get_embeddings_for_collection(collection_name)
 
     vectordb = Chroma(
         collection_name=collection_name,

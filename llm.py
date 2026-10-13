@@ -80,7 +80,7 @@ def generate(messages: list[dict], provider: str = "ollama", ollama_model: str |
     for attempt in range(3):
         try:
             res = client.chat.completions.create(
-                model=cfg["model"], messages=messages, max_tokens=1200, temperature=0.2
+                model=cfg["model"], messages=messages, max_tokens=2500, temperature=0.2
             )
             return res.choices[0].message.content or ""
         except Exception as e:
