@@ -50,42 +50,42 @@ and ran successfully inside the Docker sandbox.
                     │   FastAPI Backend │
                     └─────────┬────────┘
                               │
-       ┌───────────┬──────────┼──────────┬──────────────┐
-       │           │          │          │              │
- ┌─────▼─────┐ ┌───▼───┐ ┌────▼───┐ ┌────▼─────┐  ┌─────▼──────┐
- │  Indexer   │ │ Chat/ │ │  Bug   │ │   Code    │  │    Test     │
- │ (AST +     │ │Explain│ │ Finder │ │   Agent   │  │  Generator  │
- │  Chroma)   │ │ (RAG) │ │(pylint │ │(LangGraph │  │ (LangGraph  │
- │            │ │       │ │ + LLM) │ │ self-     │  │ + sandbox)  │
- │            │ │       │ │        │ │ correcting)│  │             │
- └─────┬─────┘ └───┬───┘ └───┬────┘ └─────┬─────┘  └──────┬──────┘
-       │           │         │            │               │
-       └───────────┴─────────┴─────┬──────┴───────────────┘
+       ┌───────────┬──────────┼──────────┬────────────  ──┐
+       │           │          │          │                │
+ ┌─────▼─────┐ ┌───▼───┐ ┌────▼───┐ ┌────▼─────┐    ┌─────▼──────┐
+ │  Indexer   │ │ Chat/ │ │  Bug   │ │   Code    │  │    Test    │
+ │ (AST +     │ │Explain│ │ Finder │ │   Agent   │  │  Generator │
+ │  Chroma)   │ │ (RAG) │ │(pylint │ │(LangGraph │  │ (LangGraph │
+ │            │ │       │ │ + LLM) │ │ self-     │  │ + sandbox) │
+ │            │ │       │ │        │ │ correcting│  │            │
+ └─────┬─────┘ └───┬───┘ └───┬────┘ └─────┬─────┘   └──────┬─────┘
+       │           │         │            │                │
+       └───────────┴─────────┴─────┬──────┴────────────── ─┘
                                     │
                           ┌─────────▼─────────┐
-                          │   Docker Sandbox    │
-                          │ (isolated exec, no   │
-                          │  network, CPU/memory │
-                          │  limited, timeout-   │
-                          │       killed)        │
+                          │   Docker Sandbox  │
+                          │ (isolated exec, no│
+                          │  network, CPU/mem │
+                          │  limited, timeout-│
+                          │       killed)     │
                           └─────────┬─────────┘
                                     │
                           ┌─────────▼─────────┐
-                          │     ChromaDB        │
-                          │   Vector Store      │
+                          │     ChromaDB      │
+                          │   Vector Store    │
                           └─────────┬─────────┘
                                     │
                           ┌─────────▼─────────┐
-                          │       Ollama         │
-                          │ (llama3.1 / phi3 /   │
-                          │    Claude API)       │
-                          └────────────────────┘
+                          │       Ollama      │
+                          │ (llama3.1 / phi3 /│
+                          │    Claude API)    │
+                          └───────────────────┘
                                     │
                           ┌─────────▼─────────┐
-                          │   GitHub API + git   │
-                          │ (branch, commit,     │
-                          │  push, open PR)      │
-                          └────────────────────┘
+                          │   GitHub API + git│
+                          │ (branch, commit,  │
+                          │  push, open PR)   │
+                          └───────────────────┘
 ```
 
 ## How it works
